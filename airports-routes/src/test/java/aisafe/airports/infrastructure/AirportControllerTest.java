@@ -36,6 +36,7 @@ import java.util.List;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -174,6 +175,17 @@ class AirportControllerTest {
     }
 
     @Test
+    void ensureSvgPhotoIsRejected() throws Exception {
+        MockMultipartFile photo = new MockMultipartFile("photo", "x.svg", "image/svg+xml",
+                "<svg xmlns=\"http://www.w3.org/2000/svg\"><script>alert(1)</script></svg>".getBytes());
+
+        mockMvc.perform(multipart("/api/airports/LIS/photos")
+                        .file(photo))
+                .andExpect(status().isBadRequest());
+        verifyNoInteractions(uploadAirportPhoto);
+    }
+
+    @Test
     void ensureAddPhotoReturns400WhenContentTypeIsNull() throws Exception {
         MockMultipartFile photo = new MockMultipartFile("photo", "lis.jpg", null, new byte[]{1, 2, 3});
 
@@ -189,7 +201,9 @@ class AirportControllerTest {
 
         mockMvc.perform(get("/api/airports/LIS/photos/0"))
                 .andExpect(status().isOk())
-                .andExpect(header().string("Content-Type", "image/jpeg"));
+                .andExpect(header().string("Content-Type", "image/jpeg"))
+                .andExpect(header().string("X-Content-Type-Options", "nosniff"))
+                .andExpect(header().string("Content-Security-Policy", "sandbox; default-src 'none'"));
     }
 
     @Test

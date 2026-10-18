@@ -34,6 +34,7 @@ import aisafe.shared.application.dtos.BulkImportResult;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.IntStream;
 import java.util.Map;
 
@@ -57,6 +58,8 @@ public class AirportController {
     private final GetAirportStatisticsUseCase airportStatistics;
     private final ListAirportsByRegionUseCase listAirportsByRegion;
     private final DeleteAirportUseCase deleteAirport;
+    private static final Set<String> ALLOWED_PHOTO_TYPES = Set.of("image/jpeg", "image/png", "image/gif", "image/webp");
+
     private final UploadAirportPhotoUseCase uploadAirportPhoto;
     private final GetAirportPhotoUseCase getAirportPhoto;
     private final ImportAirportsUseCase importAirports;
@@ -155,8 +158,7 @@ public class AirportController {
             @RequestParam(required = false) List<String> gates,
             @RequestParam(value = "photo", required = false) MultipartFile photoFile) throws IOException {
 
-        if (photoFile != null && (photoFile.getContentType() == null
-                || !photoFile.getContentType().startsWith("image/")))
+        if (photoFile != null && !isAllowedPhotoType(photoFile.getContentType()))
             return ResponseEntity.badRequest().build();
 
         if (runwayNames == null || runwayNames.isEmpty())
@@ -190,7 +192,7 @@ public class AirportController {
             @Parameter(description = "3-letter IATA airport code", example = "LIS") @PathVariable String iataCode,
             @RequestParam("photo") MultipartFile photoFile) throws IOException {
 
-        if (photoFile.getContentType() == null || !photoFile.getContentType().startsWith("image/"))
+        if (!isAllowedPhotoType(photoFile.getContentType()))
             return ResponseEntity.badRequest().build();
 
         return ResponseEntity.ok(toModel(
@@ -208,9 +210,20 @@ public class AirportController {
             @Parameter(description = "3-letter IATA airport code", example = "LIS") @PathVariable String iataCode,
             @Parameter(description = "0-based photo index") @PathVariable int index) {
         ImageData data = getAirportPhoto.execute(iataCode.toUpperCase(), index);
+        // Never run as a page in the browser, even if a stored photo were not an image
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(data.contentType()))
+                .header("X-Content-Type-Options", "nosniff")
+                .header("Content-Security-Policy", "sandbox; default-src 'none'")
                 .body(data.bytes());
+    }
+
+    /**
+     * Only raster images: an SVG can carry scripts, which would run in the browser of whoever
+     * opens the photo.
+     */
+    private static boolean isAllowedPhotoType(String contentType) {
+        return contentType != null && ALLOWED_PHOTO_TYPES.contains(contentType.toLowerCase());
     }
 
     /**
