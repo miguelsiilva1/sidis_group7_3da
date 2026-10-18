@@ -1,0 +1,162 @@
+# Configuration of the entry (Envoy), one per VM: each virtual IP leads to the entry of the VM
+# that announces it, which sends each request to a ready replica and, when that replica does not
+# answer, to another one. Loaded into the ConfigMap "entry" by deploy/setup.sh.
+#   10081 -> aircraft-maintenance replicas   10085 -> logins
+static_resources:
+  listeners:
+    - name: aircraft-maintenance
+      address: { socket_address: { address: 0.0.0.0, port_value: 10081 } }
+      filter_chains:
+        - filters:
+            - name: envoy.filters.network.http_connection_manager
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                stat_prefix: aircraft-maintenance
+                use_remote_address: true
+                http_filters:
+                  - name: envoy.filters.http.router
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+                route_config:
+                  virtual_hosts:
+                    - name: aircraft-maintenance
+                      domains: ["*"]
+                      routes:
+                          - match: { prefix: "/", headers: [{ name: ":method", string_match: { exact: GET } }] }
+                            route:
+                              cluster: aircraft-maintenance
+                              timeout: 60s
+                              retry_policy:
+                                # A read is safe to repeat: also when the replica fails (502-504) or takes too long.
+                                retry_on: connect-failure,refused-stream,reset,gateway-error
+                                num_retries: 2
+                                per_try_timeout: 5s
+                                retry_host_predicate:
+                                  - name: envoy.retry_host_predicates.previous_hosts
+                                    typed_config:
+                                      "@type": type.googleapis.com/envoy.extensions.retry.host.previous_hosts.v3.PreviousHostsPredicate
+                                host_selection_retry_max_attempts: 3
+                          - match: { prefix: "/" }
+                            route:
+                              cluster: aircraft-maintenance
+                              timeout: 60s
+                              retry_policy:
+                                # A write is repeated only when it never reached the replica.
+                                retry_on: connect-failure,refused-stream
+                                num_retries: 2
+                                retry_host_predicate:
+                                  - name: envoy.retry_host_predicates.previous_hosts
+                                    typed_config:
+                                      "@type": type.googleapis.com/envoy.extensions.retry.host.previous_hosts.v3.PreviousHostsPredicate
+                                host_selection_retry_max_attempts: 3
+    - name: login
+      address: { socket_address: { address: 0.0.0.0, port_value: 10085 } }
+      filter_chains:
+        - filters:
+            - name: envoy.filters.network.http_connection_manager
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                stat_prefix: login
+                use_remote_address: true
+                http_filters:
+                  - name: envoy.filters.http.router
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+                route_config:
+                  virtual_hosts:
+                    - name: login
+                      domains: ["*"]
+                      routes:
+                          - match: { prefix: "/", headers: [{ name: ":method", string_match: { exact: GET } }] }
+                            route:
+                              cluster: login
+                              timeout: 60s
+                              retry_policy:
+                                # A read is safe to repeat: also when the replica fails (502-504) or takes too long.
+                                retry_on: connect-failure,refused-stream,reset,gateway-error
+                                num_retries: 2
+                                per_try_timeout: 5s
+                                retry_host_predicate:
+                                  - name: envoy.retry_host_predicates.previous_hosts
+                                    typed_config:
+                                      "@type": type.googleapis.com/envoy.extensions.retry.host.previous_hosts.v3.PreviousHostsPredicate
+                                host_selection_retry_max_attempts: 3
+                          # Logging in changes nothing: safe to repeat, as a read.
+                          - match: { path: /api/auth/login }
+                            route:
+                              cluster: login
+                              timeout: 60s
+                              retry_policy:
+                                retry_on: connect-failure,refused-stream,reset,gateway-error,retriable-status-codes
+                                retriable_status_codes: [500]
+                                num_retries: 2
+                                per_try_timeout: 5s
+                                retry_host_predicate:
+                                  - name: envoy.retry_host_predicates.previous_hosts
+                                    typed_config:
+                                      "@type": type.googleapis.com/envoy.extensions.retry.host.previous_hosts.v3.PreviousHostsPredicate
+                                host_selection_retry_max_attempts: 3
+                          - match: { prefix: "/" }
+                            route:
+                              cluster: login
+                              timeout: 60s
+                              retry_policy:
+                                # A write is repeated only when it never reached the replica.
+                                retry_on: connect-failure,refused-stream
+                                num_retries: 2
+                                retry_host_predicate:
+                                  - name: envoy.retry_host_predicates.previous_hosts
+                                    typed_config:
+                                      "@type": type.googleapis.com/envoy.extensions.retry.host.previous_hosts.v3.PreviousHostsPredicate
+                                host_selection_retry_max_attempts: 3
+  clusters:
+    - name: aircraft-maintenance
+      # Every replica, from the service with their stable names, looked up every second.
+      cluster_type:
+        name: envoy.cluster.dns
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.clusters.dns.v3.DnsCluster
+          dns_refresh_rate: 1s
+          respect_dns_ttl: false
+      connect_timeout: 0.5s
+      lb_policy: ROUND_ROBIN
+      load_assignment:
+        cluster_name: aircraft-maintenance
+        endpoints:
+          - lb_endpoints:
+              - endpoint: { address: { socket_address: { address: aircraft-maintenance.aisafe.svc.cluster.local, port_value: 8081 } } }
+      # Only replicas that say they are ready get requests: one that stops answering is left out
+      # after ~2 s, without waiting for k3s to notice that its VM is gone.
+      health_checks:
+        - timeout: 0.5s
+          interval: 1s
+          unhealthy_threshold: 2
+          healthy_threshold: 1
+          http_health_check: { path: /actuator/health/readiness }
+      # Never send requests to replicas known to be down, even when most of them are.
+      common_lb_config: { healthy_panic_threshold: { value: 0 } }
+    - name: login
+      # Every replica, from the service with their stable names, looked up every second.
+      cluster_type:
+        name: envoy.cluster.dns
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.clusters.dns.v3.DnsCluster
+          dns_refresh_rate: 1s
+          respect_dns_ttl: false
+      connect_timeout: 0.5s
+      lb_policy: ROUND_ROBIN
+      load_assignment:
+        cluster_name: login
+        endpoints:
+          - lb_endpoints:
+              - endpoint: { address: { socket_address: { address: login.aisafe.svc.cluster.local, port_value: 8085 } } }
+      # Only replicas that say they are ready get requests: one that stops answering is left out
+      # after ~2 s, without waiting for k3s to notice that its VM is gone.
+      health_checks:
+        - timeout: 0.5s
+          interval: 1s
+          unhealthy_threshold: 2
+          healthy_threshold: 1
+          http_health_check: { path: /actuator/health/readiness }
+      # Never send requests to replicas known to be down, even when most of them are.
+      common_lb_config: { healthy_panic_threshold: { value: 0 } }

@@ -1,0 +1,141 @@
+# The vigia (watcher of the machines, see vigia.sh), one on every node. Applied by setup.sh, which
+# also creates the ConfigMap "vigia" (the script and its settings) and, for Proxmox, the Secret
+# "vigia-proxmox" (the API token, the host name in Proxmox's certificate and its authority).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: aisafe-vigia
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vigia
+  namespace: aisafe-vigia
+---
+# Mark and isolate nodes, delete stuck or misplaced replicas and their disks.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: aisafe-vigia
+rules:
+  - apiGroups: [""]
+    resources: [nodes]
+    verbs: [get, list, patch, update]
+  - apiGroups: [""]
+    resources: [pods, persistentvolumeclaims]
+    verbs: [get, list, delete]
+  - apiGroups: [""]
+    resources: [persistentvolumes]
+    verbs: [get, list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: aisafe-vigia
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: aisafe-vigia
+subjects:
+  - kind: ServiceAccount
+    name: vigia
+    namespace: aisafe-vigia
+---
+# The lease that decides which vigia acts.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: vigia
+  namespace: aisafe-vigia
+rules:
+  - apiGroups: [coordination.k8s.io]
+    resources: [leases]
+    verbs: [get, create, update]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: vigia
+  namespace: aisafe-vigia
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: vigia
+subjects:
+  - kind: ServiceAccount
+    name: vigia
+    namespace: aisafe-vigia
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: vigia
+  namespace: aisafe-vigia
+spec:
+  selector:
+    matchLabels:
+      app: vigia
+  template:
+    metadata:
+      labels:
+        app: vigia
+      annotations:
+        # Restarts the vigias when the script or its settings change
+        aisafe/config: "@VIGIA_CONFIG_HASH@"
+    spec:
+      serviceAccountName: vigia
+      terminationGracePeriodSeconds: 2
+      containers:
+        - name: vigia
+          # kubectl (same version as k3s), curl, jq and bash
+          image: alpine/k8s:1.36.0
+          command: [bash, /vigia/vigia.sh]
+          env:
+            - name: POD_NAME
+              valueFrom: { fieldRef: { fieldPath: metadata.name } }
+            - name: POD_NAMESPACE
+              valueFrom: { fieldRef: { fieldPath: metadata.namespace } }
+            - name: MACHINE_DRIVER
+              valueFrom:
+                { configMapKeyRef: { name: vigia, key: machine-driver } }
+            - name: REVIVE_TIMEOUT
+              valueFrom:
+                { configMapKeyRef: { name: vigia, key: revive-timeout } }
+            - name: PROXMOX_IP
+              valueFrom:
+                {
+                  configMapKeyRef:
+                    { name: vigia, key: proxmox-ip, optional: true },
+                }
+            - name: PROXMOX_HOST
+              valueFrom:
+                {
+                  secretKeyRef:
+                    { name: vigia-proxmox, key: host, optional: true },
+                }
+            - name: PROXMOX_TOKEN
+              valueFrom:
+                {
+                  secretKeyRef:
+                    { name: vigia-proxmox, key: token, optional: true },
+                }
+          volumeMounts:
+            - name: script
+              mountPath: /vigia
+            - name: proxmox
+              mountPath: /proxmox
+          resources:
+            requests: { memory: 32Mi, cpu: 10m }
+            limits: { memory: 128Mi }
+      volumes:
+        - name: script
+          configMap:
+            name: vigia
+            items:
+              - { key: vigia.sh, path: vigia.sh }
+        - name: proxmox
+          secret:
+            secretName: vigia-proxmox
+            optional: true
+            items:
+              - { key: ca.pem, path: ca.pem }
