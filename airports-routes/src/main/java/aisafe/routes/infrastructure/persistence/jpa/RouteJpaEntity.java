@@ -5,8 +5,13 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 
+/**
+ * Persistence model of a route. One row per origin and destination: a replica that receives the
+ * same route twice at once (a copy from a peer and the periodic sync) cannot store it twice.
+ */
 @Entity
-@Table(name = "route")
+@Table(name = "route",
+        uniqueConstraints = @UniqueConstraint(columnNames = {"origin_iata_code", "destination_iata_code"}))
 @Getter
 @Setter
 public class RouteJpaEntity {

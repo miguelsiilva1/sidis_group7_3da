@@ -5,6 +5,7 @@ import aisafe.routes.domain.Route;
 import aisafe.routes.domain.RouteRepository;
 import aisafe.routes.domain.RouteStatus;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
@@ -50,6 +51,15 @@ class RouteRepositoryTest {
         Optional<Route> found = routeRepository.findByOriginAndDestination(origin, destination);
 
         assertFalse(found.isPresent());
+    }
+
+    @Test
+    void ensureTheSameRouteCannotBeStoredTwice() {
+        springRepo.deleteAll();
+        springRepo.saveAndFlush(new RouteJpaEntity("LHR", "MAD", 150, 1300.0, 120, RouteStatus.ACTIVE));
+
+        assertThrows(DataIntegrityViolationException.class, () ->
+                springRepo.saveAndFlush(new RouteJpaEntity("LHR", "MAD", 150, 1300.0, 120, RouteStatus.ACTIVE)));
     }
 
     @Test
