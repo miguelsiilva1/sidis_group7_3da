@@ -140,6 +140,23 @@ H2 JDBC URL: `jdbc:h2:mem:aisafedb`
 
 Authenticate via `POST /api/auth/login` to receive a JWT token, then pass it as `Authorization: Bearer <token>` on subsequent requests.
 
+## Database Structure (Flyway)
+
+Each service creates and changes its database through numbered SQL files in
+`<service>/src/main/resources/db/migration`, applied by Flyway once and in order on every replica.
+Hibernate only checks that the database matches the entities (`ddl-auto=validate`): a service whose
+entities and migrations disagree does not start, and its tests fail.
+
+- **Changing an entity** (new field, new table, new rule): add a new file with the next number,
+  e.g. `V3__add_route_notes.sql`. Never edit a file that was already pushed: databases that
+  applied it would not see the change.
+- **A file can also fix data** before changing the structure (see
+  `airports-routes/.../V2__one_route_per_origin_and_destination.sql`).
+- **A new service** starts with `V1__initial_schema.sql`, and the same two lines in its
+  `application.properties` (`ddl-auto=validate`, `flyway.baseline-on-migrate=true`).
+- Databases created before Flyway (by Hibernate) are taken as being at version 1, and get only the
+  later files.
+
 ## Testing
 
 JUnit tests are organised to mirror the same three-layer structure as the source code:
