@@ -180,6 +180,9 @@ route_write_worker() {
       "estimatedFlightTime":150,"minimumRange":1300.0,"minimumCapacity":120,"createdBy":"failure-test"}'
     if [ "$STATUS" != 201 ]; then
       record route-create "$STATUS" fail
+      # A create that got no answer may still have been stored: delete it, without counting, or
+      # every later create of the same route is refused as a duplicate.
+      curl -s -o /dev/null --max-time "$CLIENT_TIMEOUT" -X DELETE -H "$AUTH" "$ROUTES_URL/api/routes/LHR/MAD" || true
       sleep "$INTERVAL"
       continue
     fi

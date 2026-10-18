@@ -79,16 +79,18 @@ stage_machines() {
   for i in "${!NODE_IPS[@]}"; do wait_vm "${NODE_IPS[$i]}" "${VM_IDS[$i]}"; done
   # Changes that only apply when a VM starts again (e.g. its memory): one VM at a time, each
   # back in the cluster before the next.
-  while read -r _ id; do
-    [ -n "${id:-}" ] || continue
+  # The list is read in full first: the SSH commands below would otherwise read the rest of it.
+  local to_restart=()
+  read -r -a to_restart <<< "$(awk '$1 == "reboot" { print $2 }' <<< "$reboots" | tr '\n' ' ')"
+  for id in ${to_restart[@]+"${to_restart[@]}"}; do
     for i in "${!VM_IDS[@]}"; do
       [ "${VM_IDS[$i]}" = "$id" ] || continue
       log "Restarting ${NODE_NAMES[$i]} ($id) to apply its new settings"
-      "${SSH[@]}" "$PROXMOX" "qm reboot $id"
+      "${SSH[@]}" "$PROXMOX" "qm reboot $id" < /dev/null
       wait_ssh "${NODE_IPS[$i]}"
-      on_node "${NODE_IPS[$i]}" "command -v k3s" > /dev/null 2>&1 && wait_node_ready "${NODE_NAMES[$i]}"
+      on_node "${NODE_IPS[$i]}" "command -v k3s" < /dev/null > /dev/null 2>&1 && wait_node_ready "${NODE_NAMES[$i]}"
     done
-  done <<< "$reboots"
+  done
 }
 
 # --- cluster ----------------------------------------------------------------------------------
