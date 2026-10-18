@@ -30,12 +30,33 @@ On Proxmox, the VMs also get a watchdog: a VM whose system freezes is restarted 
 
 ## Before starting
 
-- A computer with `bash`, `ssh`, `curl` and `git` (Linux, macOS, or Windows with WSL or Git Bash).
+- A computer with `bash`, `ssh`, `curl` and `git`: Linux, macOS, or Windows **with WSL**. Git Bash does
+  not work: the scripts reuse one SSH connection for many commands, which the SSH of Windows does
+  not support.
 - **Proxmox:** SSH as root to the Proxmox host with a key, and a network bridge for the VMs with
   internet access. The VMs accept the keys that log in to Proxmox as root.
 - **Existing machines:** three machines with Debian or Ubuntu, reachable by SSH with a key, as a
   user with `sudo`.
 - About 3 GB of memory per machine.
+- **Internet on the machines**: they download Debian packages, k3s, MetalLB and the images (Docker
+  Hub and GitHub). A network that needs a proxy, or blocks those sites, makes the setup fail.
+- **Fixed addresses you can choose**: three for the machines and a few for the virtual IPs, free and
+  in the machines' network (outside the router's DHCP range). Where addresses cannot be chosen
+  (e.g. eduroam), give the VMs an internal Proxmox bridge, with Proxmox routing it to the internet.
+- If this computer cannot reach the machines directly, set `SSH_JUMP` (e.g. `root@<proxmox>`).
+- Tested with Proxmox VE 9.2 (at least 7.2 is needed) and Debian 13 machines; the machines must use
+  `apt` (Debian or Ubuntu).
+
+### Proxmox inside another VM (VMware, VirtualBox, libvirt)
+
+Proxmox does not need to run on its own machine, but the program that runs it must allow two things:
+
+| Requirement | Why | Where |
+|---|---|---|
+| Virtualization inside the VM (Intel VT-x or AMD-V passed to Proxmox) | The cluster's VMs use the host's processor: without it they do not start | VMware: "Virtualize Intel VT-x/EPT or AMD-V/RVI" in the Proxmox VM's processor settings. VirtualBox: "Enable Nested VT-x/AMD-V". libvirt: CPU mode `host-passthrough` |
+| A network that accepts addresses that are not the Proxmox VM's own | The cluster's VMs and the virtual IPs have their own network addresses; if only the Proxmox VM's own is let through, the VMs have no network and the virtual IPs do not answer | VMware ESXi: accept "Promiscuous mode", "MAC address changes" and "Forged transmits" on the port group (Workstation in bridged mode usually works). VirtualBox: "Promiscuous Mode: Allow All" on the adapter |
+
+Putting the VMs on an internal Proxmox bridge, with Proxmox routing it, avoids the second one.
 
 ## Setting up
 
@@ -97,7 +118,7 @@ deploy/manifests/failure-test.sh node-off               # only one
 
 It sends requests without pause to the virtual IPs while it causes one failure at a time (a replica
 or a login killed, a deploy, a node powered off, a node frozen), and counts the requests that failed
-or got a wrong answer. Run it from a computer that reaches the virtual IPs.
+or got a wrong answer. Run it from a computer that reaches the virtual IPs (Linux, macOS or WSL).
 
 ## When something fails
 

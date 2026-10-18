@@ -20,13 +20,18 @@ cd "$DEPLOY_DIR/.."
 
 APP_URL=${APP_URL:-http://$VIP_AIRCRAFT_MAINTENANCE}
 LOGIN_URL=${LOGIN_URL:-http://$VIP_LOGIN}
-TARGET_NODE=${TARGET_NODE:-${NODE_IPS[-1]}}   # the node hit by node-off and node-freeze
+TARGET_NODE=${TARGET_NODE:-${NODE_IPS[${#NODE_IPS[@]}-1]}}   # the node hit by node-off and node-freeze
 INTERVAL=${INTERVAL:-0.2}                     # pause between requests, in each worker
 SETTLE=${SETTLE:-15}                          # seconds of traffic once the system is back to normal
 MAX_RECOVERY=${MAX_RECOVERY:-600}             # seconds to wait for the system to be normal again
 ALL_SCENARIOS=(replica-crash login-crash deploy node-off node-freeze)
 
-now_ms() { date +%s%3N; }
+# Milliseconds since 1970. The date of macOS has no milliseconds: perl, which macOS has, gives them.
+if [[ $(date +%s%3N) =~ ^[0-9]+$ ]]; then
+  now_ms() { date +%s%3N; }
+else
+  now_ms() { perl -MTime::HiRes=time -e 'printf "%d\n", time * 1000'; }
+fi
 
 # --- What "normal" means: system_normal and wait_normal, in lib.sh ----------------------------
 
@@ -167,7 +172,7 @@ trap stop_workers EXIT
 # Tells a node's kernel to power off at once (o) or to crash and stay frozen (c). The SSH
 # connection dies with the node, so it is not waited for.
 node_kernel() {
-  timeout 15 "${NODE_SSH[@]}" "$NODE_USER@$TARGET_NODE" \
+  "${NODE_SSH[@]}" "$NODE_USER@$TARGET_NODE" \
     "sudo sh -c 'sysctl -q kernel.panic=0; echo $1 > /proc/sysrq-trigger'" < /dev/null > /dev/null 2>&1 &
 }
 

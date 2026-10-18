@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Builds a whole AISafe environment as described in deploy/config.sh, or brings an existing one up
 # to date: it can be run as many times as needed, and changes only what changed.
-# Runs on any computer with bash, ssh and curl (on Windows: WSL or Git Bash):
+# Runs on any computer with bash, ssh, curl and git: Linux, macOS, or Windows with WSL.
 #   deploy/setup.sh               # everything, in this order:
 #   deploy/setup.sh machines      #   the VMs on Proxmox (nothing with MACHINES=existing)
 #   deploy/setup.sh cluster       #   k3s on every node, with MetalLB
@@ -280,7 +280,7 @@ stage_vigia() {
     secret_yaml aisafe-vigia vigia-proxmox \
       "token=$(sed -n 's/^token=//p' <<< "$access")" \
       "host=$(sed -n 's/^host=//p' <<< "$access")" \
-      "ca.pem=$(sed -n 's/^ca=//p' <<< "$access" | base64 -d)" \
+      "ca.pem=$(sed -n 's/^ca=//p' <<< "$access" | base64 --decode)" \
       | kube apply -f - > /dev/null
   fi
   kube -n aisafe-vigia create configmap vigia --dry-run=client -o yaml \
