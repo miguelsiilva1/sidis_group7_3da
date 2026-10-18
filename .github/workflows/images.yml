@@ -1,0 +1,38 @@
+name: Images
+
+# Builds the service images at every push and publishes them in the GitHub Container Registry,
+# tagged with the commit (what deploy/setup.sh uses) and the branch:
+#   ghcr.io/<owner>/<repository>/aircraft-maintenance:<commit>
+on:
+  push:
+    branches: ["**"]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  images:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java 25
+        uses: actions/setup-java@v4
+        with:
+          java-version: "25"
+          distribution: "temurin"
+          cache: maven
+
+      - name: Build and publish the images
+        env:
+          REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          chmod +x mvnw
+          prefix="ghcr.io/${GITHUB_REPOSITORY,,}"
+          branch="${GITHUB_REF_NAME//\//-}"
+          ./mvnw --batch-mode --no-transfer-progress -pl aircraft-maintenance,login -am -DskipTests \
+            package jib:build \
+            -Djib.image.prefix="$prefix" -Djib.to.tags="$GITHUB_SHA,$branch" \
+            -Djib.to.auth.username="$GITHUB_ACTOR" -Djib.to.auth.password="$REGISTRY_PASSWORD"
