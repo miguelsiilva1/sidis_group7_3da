@@ -1,0 +1,356 @@
+package aisafe.routes.infrastructure;
+
+import aisafe.routes.application.*;
+import aisafe.routes.application.dtos.ActiveRouteResponse;
+import aisafe.routes.application.dtos.AlternativeRouteResponse;
+import aisafe.routes.application.dtos.CompatibleRouteResponse;
+import aisafe.routes.application.dtos.FuelEfficiencyResponse;
+import aisafe.routes.application.dtos.CreateRouteRequest;
+import aisafe.shared.application.ExportedFile;
+import aisafe.routes.application.dtos.RouteHistoryResponse;
+import aisafe.routes.application.dtos.RouteResponse;
+import aisafe.routes.application.dtos.SearchRoutesRequest;
+import aisafe.routes.application.dtos.UpdateRouteRequest;
+import aisafe.shared.application.dtos.BulkImportResult;
+import aisafe.shared.infrastructure.BulkImportResponseBuilder;
+import org.springframework.security.core.Authentication;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import aisafe.shared.domain.PaginatedResult;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
+import org.springframework.data.web.PagedResourcesAssembler;
+import org.springframework.hateoas.CollectionModel;
+import org.springframework.hateoas.EntityModel;
+import org.springframework.hateoas.PagedModel;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+import java.util.Map;
+
+import aisafe.shared.infrastructure.ETagUtils;
+
+import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.*;
+
+@RestController
+@RequestMapping("/api/routes")
+@Tag(name = "Routes", description = "Flight Routes Management - WP#3")
+public class RouteController {
+
+    private final CreateRouteUseCase createRoute;
+    private final ViewRouteHistoryUseCase viewRouteHistory;
+    private final UpdateRouteUseCase updateRoute;
+    private final DeactivateRouteUseCase deactivateRoute;
+    private final ViewRouteDetailsUseCase viewRouteDetails;
+    private final ListRoutesFromAirportUseCase listRoutesFromAirport;
+    private final SearchRoutesUseCase searchRoutes;
+    private final DeleteRouteUseCase deleteRoute;
+    private final ListActiveRoutesUseCase listActiveRoutes;
+    private final SearchAlternativeRoutesUseCase searchAlternativeRoutes;
+    private final ExportRouteNetworkUseCase exportRouteNetwork;
+    private final ImportRoutesUseCase importRoutesUseCase;
+    private final ViewCompatibleRoutesUseCase viewCompatibleRoutes;
+    private final CalculateFuelEfficiencyUseCase calculateFuelEfficiency;
+
+    public RouteController(CreateRouteUseCase createRoute,
+                           ViewRouteHistoryUseCase viewRouteHistory,
+                           UpdateRouteUseCase updateRoute,
+                           DeactivateRouteUseCase deactivateRoute,
+                           ViewRouteDetailsUseCase viewRouteDetails,
+                           ListRoutesFromAirportUseCase listRoutesFromAirport,
+                           SearchRoutesUseCase searchRoutes,
+                           DeleteRouteUseCase deleteRoute,
+                           ListActiveRoutesUseCase listActiveRoutes,
+                           SearchAlternativeRoutesUseCase searchAlternativeRoutes,
+                           ExportRouteNetworkUseCase exportRouteNetwork,
+                           ImportRoutesUseCase importRoutesUseCase,
+                           ViewCompatibleRoutesUseCase viewCompatibleRoutes,
+                           CalculateFuelEfficiencyUseCase calculateFuelEfficiency) {
+        this.createRoute = createRoute;
+        this.viewRouteHistory = viewRouteHistory;
+        this.updateRoute = updateRoute;
+        this.deactivateRoute = deactivateRoute;
+        this.viewRouteDetails = viewRouteDetails;
+        this.listRoutesFromAirport = listRoutesFromAirport;
+        this.searchRoutes = searchRoutes;
+        this.deleteRoute = deleteRoute;
+        this.listActiveRoutes = listActiveRoutes;
+        this.searchAlternativeRoutes = searchAlternativeRoutes;
+        this.exportRouteNetwork = exportRouteNetwork;
+        this.importRoutesUseCase = importRoutesUseCase;
+        this.viewCompatibleRoutes = viewCompatibleRoutes;
+        this.calculateFuelEfficiency = calculateFuelEfficiency;
+    }
+
+    private EntityModel<RouteResponse> toModel(RouteResponse route) {
+        String origin = route.originIataCode();
+        String destination = route.destinationIataCode();
+        return EntityModel.of(route,
+                linkTo(methodOn(RouteController.class).getRouteDetails(origin, destination)).withSelfRel(),
+                linkTo(methodOn(RouteController.class).getRouteHistory(origin, destination)).withRel("history"),
+                linkTo(methodOn(RouteController.class).updateRoute(origin, destination, null, null, null)).withRel("update"),
+                linkTo(methodOn(RouteController.class).deactivateRoute(origin, destination, null, null)).withRel("deactivate"),
+                linkTo(methodOn(RouteController.class).deleteRoute(origin, destination)).withRel("delete"));
+    }
+
+
+
+    // US110
+    @Operation(summary = "Create a flight route", description = "Registers a new flight route in the system. (US110)")
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "Route created successfully"),
+            @ApiResponse(responseCode = "400", description = "Invalid request data supplied"),
+            @ApiResponse(responseCode = "401", description = "Authentication required"),
+            @ApiResponse(responseCode = "403", description = "Insufficient permissions")
+    })
+    @PostMapping
+    public ResponseEntity<EntityModel<RouteResponse>> createRoute(
+            @Valid @RequestBody CreateRouteRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(toModel(createRoute.execute(request)));
+    }
+
+    // US214
+    @Operation(summary = "List active routes", description = "Lists active routes sorted by distance or popularity. (US214)")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Active routes retrieved successfully"),
+            @ApiResponse(responseCode = "400", description = "Invalid status or sortBy parameter")
+    })
+    @GetMapping
+    public ResponseEntity<CollectionModel<ActiveRouteResponse>> getActiveRoutes(
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String sortBy) {
+        return ResponseEntity.ok(CollectionModel.of(
+                listActiveRoutes.execute(status, sortBy),
+                linkTo(methodOn(RouteController.class).getActiveRoutes(status, sortBy)).withSelfRel()));
+    }
+
+    // US216
+    @Operation(summary = "Search alternative routes", description = "Finds indirect active route paths between two airports. (US216)")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Alternative routes retrieved successfully"),
+            @ApiResponse(responseCode = "400", description = "Invalid origin or destination"),
+            @ApiResponse(responseCode = "404", description = "Airport not found")
+    })
+    @GetMapping("/alternatives")
+    public ResponseEntity<CollectionModel<AlternativeRouteResponse>> getAlternativeRoutes(
+            @RequestParam String origin,
+            @RequestParam String destination) {
+        return ResponseEntity.ok(CollectionModel.of(
+                searchAlternativeRoutes.execute(origin, destination),
+                linkTo(methodOn(RouteController.class).getAlternativeRoutes(origin, destination)).withSelfRel()));
+    }
+
+    // US203 (was GET /api/aircrafts/{registration}/compatible-routes in the monolith, decision D2)
+    @Operation(summary = "View compatible routes for an aircraft", description = "Lists the active routes an aircraft can fly, given its range and seat capacity. The aircraft is read from aircraft-maintenance. (US203)")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Compatible routes retrieved successfully"),
+            @ApiResponse(responseCode = "401", description = "Authentication required"),
+            @ApiResponse(responseCode = "403", description = "Insufficient permissions"),
+            @ApiResponse(responseCode = "404", description = "Aircraft not found with specified registration number"),
+            @ApiResponse(responseCode = "503", description = "aircraft-maintenance did not answer")
+    })
+    @GetMapping("/compatible")
+    public ResponseEntity<CollectionModel<EntityModel<CompatibleRouteResponse>>> getCompatibleRoutes(
+            @Parameter(description = "Registration number of the aircraft (e.g. CS-TKA)") @RequestParam String aircraft) {
+        List<EntityModel<CompatibleRouteResponse>> items = viewCompatibleRoutes.execute(aircraft).stream()
+                .map(r -> EntityModel.of(r,
+                        linkTo(methodOn(RouteController.class).getRouteDetails(r.originIataCode(), r.destinationIataCode())).withRel("route")))
+                .toList();
+        return ResponseEntity.ok(CollectionModel.of(items,
+                linkTo(methodOn(RouteController.class).getCompatibleRoutes(aircraft)).withSelfRel()));
+    }
+
+    // US227 (was GET /api/aircrafts/{registration}/fuel-efficiency in the monolith, decision D2)
+    @Operation(summary = "Calculate fuel needed for a route", description = "Fuel consumption per distance unit of an aircraft and the fuel it needs for the route's minimum range. The aircraft is read from aircraft-maintenance. (US227)")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Fuel efficiency calculated successfully"),
+            @ApiResponse(responseCode = "401", description = "Authentication required"),
+            @ApiResponse(responseCode = "403", description = "Insufficient permissions"),
+            @ApiResponse(responseCode = "404", description = "Aircraft or route not found"),
+            @ApiResponse(responseCode = "503", description = "aircraft-maintenance did not answer")
+    })
+    @GetMapping("/{origin}/{destination}/fuel-efficiency")
+    public ResponseEntity<EntityModel<FuelEfficiencyResponse>> getFuelEfficiency(
+            @Parameter(description = "IATA code of the origin airport") @PathVariable String origin,
+            @Parameter(description = "IATA code of the destination airport") @PathVariable String destination,
+            @Parameter(description = "Registration number of the aircraft (e.g. CS-TKA)") @RequestParam String aircraft) {
+        FuelEfficiencyResponse response = calculateFuelEfficiency.execute(aircraft, origin, destination);
+        return ResponseEntity.ok(EntityModel.of(response,
+                linkTo(methodOn(RouteController.class).getFuelEfficiency(origin, destination, aircraft)).withSelfRel(),
+                linkTo(methodOn(RouteController.class).getRouteDetails(response.routeOrigin(), response.routeDestination())).withRel("route")));
+    }
+
+    // US111
+    @Operation(summary = "Keep track of route history", description = "Retrieves the historical changes and updates made to a specific route. (US111)")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Route history retrieved successfully"),
+            @ApiResponse(responseCode = "401", description = "Authentication required"),
+            @ApiResponse(responseCode = "403", description = "Insufficient permissions"),
+            @ApiResponse(responseCode = "404", description = "Route not found")
+    })
+    @GetMapping("/{origin}/{destination}/history")
+    public ResponseEntity<CollectionModel<EntityModel<RouteHistoryResponse>>> getRouteHistory(
+            @Parameter(description = "IATA code of the origin airport") @PathVariable String origin,
+            @Parameter(description = "IATA code of the destination airport") @PathVariable String destination) {
+        String originUpper = origin.toUpperCase();
+        String destinationUpper = destination.toUpperCase();
+        List<EntityModel<RouteHistoryResponse>> historyModels = viewRouteHistory.execute(originUpper, destinationUpper).stream()
+                .map(response -> EntityModel.of(response,
+                            linkTo(methodOn(RouteController.class).getRouteDetails(originUpper, destinationUpper))
+                                    .withRel("route")))
+                .toList();
+        return ResponseEntity.ok(CollectionModel.of(historyModels,
+                linkTo(methodOn(RouteController.class).getRouteHistory(originUpper, destinationUpper)).withSelfRel(),
+                linkTo(methodOn(RouteController.class).getRouteDetails(originUpper, destinationUpper)).withRel("route")));
+    }
+
+    // US112
+    @Operation(summary = "Update route details", description = "Updates the information of an existing flight route. (US112)")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Route updated successfully"),
+            @ApiResponse(responseCode = "400", description = "Invalid request data supplied"),
+            @ApiResponse(responseCode = "401", description = "Authentication required"),
+            @ApiResponse(responseCode = "403", description = "Insufficient permissions"),
+            @ApiResponse(responseCode = "404", description = "Route not found"),
+            @ApiResponse(responseCode = "412", description = "ETag validation failed")
+    })
+    @PutMapping("/{origin}/{destination}")
+    public ResponseEntity<EntityModel<RouteResponse>> updateRoute(
+            @Parameter(description = "IATA code of the origin airport") @PathVariable String origin,
+            @Parameter(description = "IATA code of the destination airport") @PathVariable String destination,
+            @RequestHeader(HttpHeaders.IF_MATCH) String ifMatch,
+            @Valid @RequestBody UpdateRouteRequest request,
+            Authentication authentication) {
+        Long version = ETagUtils.parseVersion(ifMatch);
+        String username = authentication != null ? authentication.getName() : "anonymous";
+        return ResponseEntity.ok(toModel(updateRoute.execute(origin.toUpperCase(), destination.toUpperCase(), request, version, username)));
+    }
+
+    // US112
+    @Operation(summary = "Deactivate a route", description = "Sets an active flight route status to deactivated. (US112)")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Route deactivated successfully"),
+            @ApiResponse(responseCode = "401", description = "Authentication required"),
+            @ApiResponse(responseCode = "403", description = "Insufficient permissions"),
+            @ApiResponse(responseCode = "404", description = "Route not found"),
+            @ApiResponse(responseCode = "412", description = "ETag validation failed")
+    })
+    @PatchMapping("/{origin}/{destination}/deactivate")
+    public ResponseEntity<EntityModel<RouteResponse>> deactivateRoute(
+            @Parameter(description = "IATA code of the origin airport") @PathVariable String origin,
+            @Parameter(description = "IATA code of the destination airport") @PathVariable String destination,
+            @RequestHeader(HttpHeaders.IF_MATCH) String ifMatch,
+            Authentication authentication) {
+        Long version = ETagUtils.parseVersion(ifMatch);
+        String username = authentication != null ? authentication.getName() : "anonymous";
+        return ResponseEntity.ok(toModel(deactivateRoute.execute(origin.toUpperCase(), destination.toUpperCase(), version, username)));
+    }
+
+    // US113
+    @Operation(summary = "View route details", description = "Retrieves the full details of a specific route. (US113)")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Route details retrieved successfully"),
+            @ApiResponse(responseCode = "401", description = "Authentication required"),
+            @ApiResponse(responseCode = "403", description = "Insufficient permissions"),
+            @ApiResponse(responseCode = "404", description = "Route not found")
+    })
+    @GetMapping("/{origin}/{destination}")
+    public ResponseEntity<EntityModel<RouteResponse>> getRouteDetails(
+            @Parameter(description = "IATA code of the origin airport") @PathVariable String origin,
+            @Parameter(description = "IATA code of the destination airport") @PathVariable String destination) {
+        return ResponseEntity.ok(toModel(viewRouteDetails.execute(origin.toUpperCase(), destination.toUpperCase())));
+    }
+
+    // US113
+    @Operation(summary = "View routes from airport", description = "Retrieves all active routes originating from a specific airport. (US113)")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Routes retrieved successfully"),
+            @ApiResponse(responseCode = "401", description = "Authentication required"),
+            @ApiResponse(responseCode = "403", description = "Insufficient permissions"),
+            @ApiResponse(responseCode = "404", description = "Airport not found")
+    })
+    @GetMapping("/airport/{iataCode}")
+    public ResponseEntity<PagedModel<EntityModel<RouteResponse>>> getRoutesFromAirport(
+            @Parameter(description = "IATA code of the origin airport (e.g., LIS, OPO)") @PathVariable String iataCode,
+            @PageableDefault(size = 20) Pageable pageable,
+            PagedResourcesAssembler<RouteResponse> assembler) {
+        PaginatedResult<RouteResponse> result = listRoutesFromAirport.execute(iataCode.toUpperCase(), pageable.getPageNumber(), pageable.getPageSize());
+        Page<RouteResponse> routePage = new PageImpl<>(result.data(), pageable, result.totalElements());
+        return ResponseEntity.ok(assembler.toModel(routePage, this::toModel));
+    }
+
+    // US114
+    @Operation(summary = "Search routes", description = "Searches for flight routes based on origin and/or destination criteria. (US114)")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Search completed successfully"),
+            @ApiResponse(responseCode = "400", description = "Invalid search parameters"),
+            @ApiResponse(responseCode = "401", description = "Authentication required"),
+            @ApiResponse(responseCode = "403", description = "Insufficient permissions")
+    })
+    @GetMapping("/search")
+    public ResponseEntity<PagedModel<EntityModel<RouteResponse>>> searchRoutes(
+            @Parameter(description = "Origin IATA code") @RequestParam(required = false) String origin,
+            @Parameter(description = "Destination IATA code") @RequestParam(required = false) String destination,
+            @PageableDefault(size = 20) Pageable pageable,
+            PagedResourcesAssembler<RouteResponse> assembler) {
+        PaginatedResult<RouteResponse> result = this.searchRoutes.execute(new SearchRoutesRequest(origin, destination, pageable.getPageNumber(), pageable.getPageSize()));
+        Page<RouteResponse> routePage = new PageImpl<>(result.data(), pageable, result.totalElements());
+        return ResponseEntity.ok(assembler.toModel(routePage, this::toModel));
+    }
+
+    @Operation(summary = "Delete a route", description = "Permanently removes a flight route. Requires Admin role.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "204", description = "Route deleted successfully"),
+            @ApiResponse(responseCode = "401", description = "Authentication required"),
+            @ApiResponse(responseCode = "403", description = "Insufficient permissions"),
+            @ApiResponse(responseCode = "404", description = "Route not found")
+    })
+    @DeleteMapping("/{origin}/{destination}")
+    public ResponseEntity<Void> deleteRoute(
+            @Parameter(description = "IATA code of the origin airport") @PathVariable String origin,
+            @Parameter(description = "IATA code of the destination airport") @PathVariable String destination) {
+        deleteRoute.execute(origin.toUpperCase(), destination.toUpperCase());
+        return ResponseEntity.noContent().build();
+    }
+
+    // US228
+    @Operation(summary = "Export route network", description = "Exports the active route network in GeoJSON or KML format. (US228)")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Export file generated successfully"),
+            @ApiResponse(responseCode = "400", description = "Invalid format requested"),
+            @ApiResponse(responseCode = "401", description = "Authentication required")
+    })
+    @GetMapping("/export")
+    public ResponseEntity<byte[]> exportRouteNetwork(
+            @RequestParam(defaultValue = "geojson") String format) {
+        ExportedFile file = exportRouteNetwork.execute(format);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_TYPE, file.contentType())
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + file.fileName() + "\"")
+                .body(file.content());
+    }
+
+    @Operation(summary = "Import routes", description = "Bulk import routes from a CSV file.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "All routes imported successfully"),
+            @ApiResponse(responseCode = "207", description = "Partial success or all failed"),
+            @ApiResponse(responseCode = "400", description = "Invalid request")
+    })
+    @PostMapping(value = "/import", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<Map<String, Object>> importRoutes(
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile file,
+            Authentication authentication) {
+        String username = authentication != null ? authentication.getName() : "BulkImport";
+        BulkImportResult<String> result = importRoutesUseCase.execute(file, username);
+        return BulkImportResponseBuilder.buildResponse(result);
+    }
+}

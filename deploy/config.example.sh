@@ -44,6 +44,7 @@ NODE_GRACE=20s
 # Virtual IPs: free addresses in the nodes' network, handed out by MetalLB.
 VIP_POOL=192.168.124.25-192.168.124.31
 VIP_AIRCRAFT_MAINTENANCE=192.168.124.25
+VIP_AIRPORTS_ROUTES=192.168.124.26
 VIP_LOGIN=192.168.124.28
 
 # --- Images of the services -----------------------------------------------------------------------
