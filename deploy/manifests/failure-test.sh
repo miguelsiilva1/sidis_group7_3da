@@ -170,8 +170,11 @@ route_list_worker() {
 }
 
 # Creates a route that is not in the sample data, reads it back and deletes it. Creating it again
-# after the deletion is a newer change, which wins over the deletion on every replica.
+# after the deletion is a newer change, which wins over the deletion on every replica. The workers
+# of the previous scenario were stopped at any point, maybe between creating and deleting: the
+# route they left behind is deleted first, without counting.
 route_write_worker() {
+  curl -s -o /dev/null --max-time "$CLIENT_TIMEOUT" -X DELETE -H "$AUTH" "$ROUTES_URL/api/routes/LHR/MAD" || true
   while :; do
     call POST "$ROUTES_URL/api/routes" -H "$AUTH" "${json[@]}" -d '{"originIataCode":"LHR","destinationIataCode":"MAD",
       "estimatedFlightTime":150,"minimumRange":1300.0,"minimumCapacity":120,"createdBy":"failure-test"}'
