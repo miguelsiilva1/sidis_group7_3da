@@ -7,6 +7,7 @@
 #   deploy/manifests/failure-test.sh replica-crash deploy   # only these
 #
 #   replica-crash   an aircraft-maintenance replica is killed
+#   routes-crash    an airports-routes replica is killed
 #   login-crash     a login is killed
 #   deploy          every service restarts, one replica at a time (as deploy/setup.sh does)
 #   node-off        a node loses power
@@ -19,12 +20,13 @@ source "$(dirname "$0")/../lib.sh"
 cd "$DEPLOY_DIR/.."
 
 APP_URL=${APP_URL:-http://$VIP_AIRCRAFT_MAINTENANCE}
+ROUTES_URL=${ROUTES_URL:-http://$VIP_AIRPORTS_ROUTES}
 LOGIN_URL=${LOGIN_URL:-http://$VIP_LOGIN}
 TARGET_NODE=${TARGET_NODE:-${NODE_IPS[${#NODE_IPS[@]}-1]}}   # the node hit by node-off and node-freeze
 INTERVAL=${INTERVAL:-0.2}                     # pause between requests, in each worker
 SETTLE=${SETTLE:-15}                          # seconds of traffic once the system is back to normal
 MAX_RECOVERY=${MAX_RECOVERY:-600}             # seconds to wait for the system to be normal again
-ALL_SCENARIOS=(replica-crash login-crash deploy node-off node-freeze)
+ALL_SCENARIOS=(replica-crash routes-crash login-crash deploy node-off node-freeze)
 
 # Milliseconds since 1970. The date of macOS has no milliseconds: perl, which macOS has, gives them.
 if [[ $(date +%s%3N) =~ ^[0-9]+$ ]]; then
@@ -133,6 +135,68 @@ write_worker() {
   done
 }
 
+# A route that exists must always be found.
+route_read_worker() {
+  while :; do
+    call GET "$ROUTES_URL/api/routes/LIS/OPO" -H "$AUTH"
+    case $STATUS in
+      200) record route-read 200 ok ;;
+      404) record route-read 404 wrong "existing route not found" ;;
+      *) record route-read "$STATUS" fail ;;
+    esac
+    sleep "$INTERVAL"
+  done
+}
+
+# The routes of every replica must be listed: not flagged partial, with seeded routes held by
+# different replicas.
+route_list_worker() {
+  local route
+  while :; do
+    call GET "$ROUTES_URL/api/routes/search?size=1000" -H "$AUTH"
+    if [ "$STATUS" != 200 ]; then
+      record route-list "$STATUS" fail
+    elif grep -qi '^x-partial-result: *true' "$HEADERS"; then
+      record route-list 200 wrong "partial result"
+    else
+      for route in OPO:LIS LIS:MAD CDG:LHR; do
+        grep -q "\"originIataCode\":\"${route%:*}\",\"destinationIataCode\":\"${route#*:}\"" "$BODY" || break
+        route=
+      done
+      if [ -n "$route" ]; then record route-list 200 wrong "seeded route missing: $route"; else record route-list 200 ok; fi
+    fi
+    sleep "$INTERVAL"
+  done
+}
+
+# Creates a route that is not in the sample data, reads it back and deletes it. Creating it again
+# after the deletion is a newer change, which wins over the deletion on every replica.
+route_write_worker() {
+  while :; do
+    call POST "$ROUTES_URL/api/routes" -H "$AUTH" "${json[@]}" -d '{"originIataCode":"LHR","destinationIataCode":"MAD",
+      "estimatedFlightTime":150,"minimumRange":1300.0,"minimumCapacity":120,"createdBy":"failure-test"}'
+    if [ "$STATUS" != 201 ]; then
+      record route-create "$STATUS" fail
+      sleep "$INTERVAL"
+      continue
+    fi
+    record route-create 201 ok
+    call GET "$ROUTES_URL/api/routes/LHR/MAD" -H "$AUTH"
+    case $STATUS in
+      200) record route-read-new 200 ok ;;
+      404) record route-read-new 404 wrong "route created just before not found" ;;
+      *) record route-read-new "$STATUS" fail ;;
+    esac
+    call DELETE "$ROUTES_URL/api/routes/LHR/MAD" -H "$AUTH"
+    case $STATUS in
+      204) record route-delete 204 ok ;;
+      404) record route-delete 404 wrong "route created just before not found" ;;
+      *) record route-delete "$STATUS" fail ;;
+    esac
+    sleep "$INTERVAL"
+  done
+}
+
 # Valid credentials must always be accepted, by whichever login answers.
 login_worker() {   # login_worker CHECK USER PASSWORD
   while :; do
@@ -149,7 +213,7 @@ login_worker() {   # login_worker CHECK USER PASSWORD
 WORKERS=()
 start_workers() {
   local name
-  for name in read list write; do
+  for name in read list write route_read route_list route_write; do
     BODY=$RUN/.body-$name HEADERS=$RUN/.headers-$name "${name}_worker" &
     WORKERS+=($!)
   done
@@ -179,10 +243,12 @@ node_kernel() {
 cause() {
   case $1 in
     replica-crash) kube -n aisafe delete pod aircraft-maintenance-1 --grace-period=0 --force 2> /dev/null ;;
+    routes-crash) kube -n aisafe delete pod airports-routes-1 --grace-period=0 --force 2> /dev/null ;;
     login-crash) kube -n aisafe delete "$(kube -n aisafe get pods -l app=login -o name | head -1)" --grace-period=0 --force 2> /dev/null ;;
     deploy)
-      kube -n aisafe rollout restart statefulset/aircraft-maintenance statefulset/login
+      kube -n aisafe rollout restart statefulset/aircraft-maintenance statefulset/airports-routes statefulset/login
       kube -n aisafe rollout status statefulset/aircraft-maintenance --timeout=600s
+      kube -n aisafe rollout status statefulset/airports-routes --timeout=600s
       kube -n aisafe rollout status statefulset/login --timeout=600s ;;
     node-off) node_kernel o ;;
     node-freeze) node_kernel c ;;

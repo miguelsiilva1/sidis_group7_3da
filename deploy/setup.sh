@@ -207,9 +207,9 @@ prepare_images() {
   if [ "$IMAGES" = local ]; then
     version=$(sed -n 's:.*<version>\(.*-SNAPSHOT\)</version>.*:\1:p' "$REPO_DIR/pom.xml" | head -1)
     log "Building the images here (Java 25)"
-    (cd "$REPO_DIR" && ./mvnw -q -B -pl aircraft-maintenance,login -am -DskipTests package jib:buildTar)
+    (cd "$REPO_DIR" && ./mvnw -q -B -pl aircraft-maintenance,airports-routes,login -am -DskipTests package jib:buildTar)
     for ip in "${NODE_IPS[@]}"; do
-      for svc in aircraft-maintenance login; do
+      for svc in aircraft-maintenance airports-routes login; do
         log "Copying aisafe/$svc:$version to $ip"
         on_node "$ip" "k3s ctr images import -" < "$REPO_DIR/$svc/target/jib-image.tar" > /dev/null
       done
@@ -225,7 +225,7 @@ prepare_images() {
     [ -n "$commit" ] || { echo "Branch $IMAGE_TAG not found on github.com/$GITHUB_REPO." >&2; return 1; }
   fi
   IMAGE_PREFIX=ghcr.io/$(tr '[:upper:]' '[:lower:]' <<< "$GITHUB_REPO") IMAGE_TAG=$commit IMAGE_PULL_POLICY=IfNotPresent
-  for svc in aircraft-maintenance login; do
+  for svc in aircraft-maintenance airports-routes login; do
     token=$(curl -sf "https://ghcr.io/token?scope=repository:${IMAGE_PREFIX#ghcr.io/}/$svc:pull" | sed -n 's/.*"token":"\([^"]*\)".*/\1/p') || true
     if ! curl -sf -o /dev/null -H "Authorization: Bearer $token" \
         -H 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json' \
@@ -240,6 +240,7 @@ prepare_images() {
 
 stage_app() {
   local jwt
+  : "${VIP_AIRPORTS_ROUTES:?missing in deploy/config.sh: add it from deploy/config.example.sh}"
   prepare_images
   log "Namespace, JWT secret and the entries' configuration"
   kube create namespace aisafe --dry-run=client -o yaml | kube apply -f - > /dev/null
@@ -252,6 +253,7 @@ stage_app() {
 
   log "Applying the manifests"
   sed -e "s|@VIP_AIRCRAFT_MAINTENANCE@|$VIP_AIRCRAFT_MAINTENANCE|g" -e "s|@VIP_LOGIN@|$VIP_LOGIN|g" \
+      -e "s|@VIP_AIRPORTS_ROUTES@|$VIP_AIRPORTS_ROUTES|g" \
       -e "s|@IMAGE_PREFIX@|$IMAGE_PREFIX|g" -e "s|@IMAGE_TAG@|$IMAGE_TAG|g" \
       -e "s|@IMAGE_PULL_POLICY@|$IMAGE_PULL_POLICY|g" \
       -e "s|@ENTRY_CONFIG_HASH@|$(hash16 < "$DEPLOY_DIR/manifests/envoy.yaml")|g" \
@@ -259,9 +261,10 @@ stage_app() {
   # Local images keep their name from one build to the next: restart to run the new ones. Images
   # from GitHub have a new name per commit, so applying already restarted what changed.
   if [ "$IMAGES" = local ]; then
-    kube -n aisafe rollout restart statefulset/aircraft-maintenance statefulset/login > /dev/null
+    kube -n aisafe rollout restart statefulset/aircraft-maintenance statefulset/airports-routes statefulset/login > /dev/null
   fi
   kube -n aisafe rollout status statefulset/aircraft-maintenance --timeout=900s
+  kube -n aisafe rollout status statefulset/airports-routes --timeout=900s
   kube -n aisafe rollout status statefulset/login --timeout=900s
   kube -n aisafe rollout status daemonset/entry --timeout=300s
 }
@@ -304,12 +307,13 @@ stage_check() {
   on_node "${NODE_IPS[0]}" "
     for _ in \$(seq 30); do
       token=\$(curl -sf --max-time 10 -H 'Content-Type: application/json' -d '{\"username\":\"atcc\",\"password\":\"atcc123\"}' http://$VIP_LOGIN/api/auth/login | sed -n 's/.*\"token\":\"\\([^\"]*\\)\".*/\\1/p') || true
-      if [ -n \"\$token\" ] && curl -sf --max-time 10 -o /dev/null -H \"Authorization: Bearer \$token\" http://$VIP_AIRCRAFT_MAINTENANCE/api/aircrafts; then
+      if [ -n \"\$token\" ] && curl -sf --max-time 10 -o /dev/null -H \"Authorization: Bearer \$token\" http://$VIP_AIRCRAFT_MAINTENANCE/api/aircrafts \
+          && curl -sf --max-time 10 -o /dev/null -H \"Authorization: Bearer \$token\" http://$VIP_AIRPORTS_ROUTES/api/routes/search; then
         exit 0
       fi
       sleep 2
     done
-    echo 'No login through $VIP_LOGIN, or no answer from aircraft-maintenance through $VIP_AIRCRAFT_MAINTENANCE, for a minute.' >&2
+    echo 'No login through $VIP_LOGIN, or no answer from aircraft-maintenance through $VIP_AIRCRAFT_MAINTENANCE or from airports-routes through $VIP_AIRPORTS_ROUTES, for a minute.' >&2
     exit 1"
   kube get nodes -o wide
   kube -n aisafe get pods -o wide
@@ -317,6 +321,7 @@ stage_check() {
 
 AISafe is up:
   aircraft-maintenance  http://$VIP_AIRCRAFT_MAINTENANCE   (Swagger: /swagger-ui.html)
+  airports-routes       http://$VIP_AIRPORTS_ROUTES   (Swagger: /swagger-ui.html)
   login                 http://$VIP_LOGIN
 To check that no request fails while machines and replicas fail, from a computer that reaches
 these addresses: deploy/manifests/failure-test.sh

@@ -1,0 +1,78 @@
+package aisafe.airports.application;
+
+import aisafe.airports.domain.Airport;
+import aisafe.airports.domain.AirportNotFoundException;
+import aisafe.airports.domain.AirportRepository;
+import aisafe.airports.domain.AirportStatus;
+import aisafe.airports.domain.IataCode;
+import aisafe.airports.domain.Runway;
+import aisafe.shared.domain.ConcurrencyException;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.util.List;
+import java.util.Optional;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
+
+@ExtendWith(MockitoExtension.class)
+class UpdateAirportStatusUseCaseTest {
+
+    @Mock
+    private AirportRepository airportRepository;
+
+    @InjectMocks
+    private UpdateAirportStatusUseCase updateAirportStatus;
+
+    private Airport buildAirport() {
+        return new Airport("LIS", "Lisbon Airport", "Lisbon", "Portugal", "Europe", "Europe/Lisbon",
+                38.77, -9.13, List.of(new Runway("03/21", 3000, "030/210")));
+    }
+
+    @Test
+    void ensureStatusIsUpdatedSuccessfully() {
+        Airport airport = buildAirport();
+        IataCode code = new IataCode("LIS");
+        when(airportRepository.findByIataCode(code)).thenReturn(Optional.of(airport));
+        when(airportRepository.findVersionFor(code)).thenReturn(0L);
+
+        assertDoesNotThrow(() -> updateAirportStatus.execute("LIS", AirportStatus.CLOSED, 0L));
+        verify(airportRepository).save(airport);
+    }
+
+    @Test
+    void ensureExceptionWhenAirportNotFound() {
+        when(airportRepository.findByIataCode(new IataCode("XYZ"))).thenReturn(Optional.empty());
+
+        assertThrows(AirportNotFoundException.class, () -> updateAirportStatus.execute("XYZ", AirportStatus.CLOSED, 0L));
+        verify(airportRepository, never()).save(any());
+    }
+
+    @Test
+    void ensureConcurrencyExceptionWhenVersionMismatches() {
+        Airport airport = buildAirport();
+        IataCode code = new IataCode("LIS");
+        when(airportRepository.findByIataCode(code)).thenReturn(Optional.of(airport));
+        when(airportRepository.findVersionFor(code)).thenReturn(5L);
+
+        assertThrows(ConcurrencyException.class, () -> updateAirportStatus.execute("LIS", AirportStatus.CLOSED, 0L));
+        verify(airportRepository, never()).save(any());
+    }
+
+    @Test
+    void ensureStatusIsUpdatedSuccessfullyWithNullVersion() {
+        Airport airport = buildAirport();
+        IataCode code = new IataCode("LIS");
+        when(airportRepository.findByIataCode(code)).thenReturn(Optional.of(airport));
+        when(airportRepository.findVersionFor(code)).thenReturn(0L);
+
+        assertDoesNotThrow(() -> updateAirportStatus.execute("LIS", AirportStatus.CLOSED, null));
+        verify(airportRepository).save(airport);
+        verify(airportRepository).findVersionFor(code);
+    }
+}

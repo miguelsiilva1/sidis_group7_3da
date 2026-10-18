@@ -1,0 +1,65 @@
+package aisafe.airports.domain;
+
+import java.util.Objects;
+import java.util.regex.Pattern;
+
+public final class Contact {
+    private final ContactType type;
+    private final String value;
+    private final String description;
+
+    private static final Pattern EMAIL_PATTERN = Pattern.compile("(([^<>()\\[\\]\\\\.,;:\\s@\"]+(\\.[^<>()\\[\\]\\\\.,;:\\s@\"]+)*)|(\".+\"))@((\\[[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}])|(([a-zA-Z\\-0-9]+\\.)+[a-zA-Z]{2,}))");
+    private static final Pattern PHONE_PATTERN = Pattern.compile("^\\+?[0-9]{9,15}$");
+
+    public Contact(ContactType type, String value, String description) {
+        if (type == null) {
+            throw new InvalidContactException("Contact type cannot be null.");
+        }
+        if (value == null) {
+            throw new InvalidContactException("Contact value cannot be null.");
+        }
+        value = value.trim();
+        if (value.isEmpty()) {
+            throw new InvalidContactException("Contact value cannot be empty.");
+        }
+        switch (type) {
+            case PHONE, FAX:
+                if (!PHONE_PATTERN.matcher(value).matches()) {
+                    throw new InvalidContactException("Invalid phone number format");
+                }
+                break;
+            case EMAIL:
+                if (!EMAIL_PATTERN.matcher(value).matches()) {
+                    throw new InvalidContactException("Invalid email");
+                }
+                break;
+            case OTHER:
+                break;
+        }
+        this.type = type;
+        this.description = (description != null) ? description.trim() : null;
+        this.value = value;
+    }
+
+    public ContactType getType() { return type; }
+    public String getValue() { return value; }
+    public String getDescription() { return description; }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Contact that = (Contact) o;
+        return type == that.type && Objects.equals(value, that.value) && Objects.equals(description, that.description);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(type, value, description);
+    }
+
+    @Override
+    public String toString() {
+        return "Contact{type=" + type + ", value='" + value + "'}";
+    }
+}
