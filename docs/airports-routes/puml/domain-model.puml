@@ -1,0 +1,127 @@
+@startuml domain-model
+title airports-routes - Domain model
+
+hide empty methods
+skinparam shadowing false
+
+package "airports (catalog: on every replica)" {
+  class Airport <<aggregate root>> {
+    name
+    city
+    country
+    region
+    timezone
+    status : AirportStatus
+    operationalHours
+  }
+  class IataCode <<value object>> {
+    code
+  }
+  class Coordinates <<value object>> {
+    latitude
+    longitude
+  }
+  class Runway <<value object>> {
+    name
+    length
+    orientation
+  }
+  class Terminal <<value object>> {
+    name
+  }
+  class Gate <<value object>> {
+    identifier
+  }
+  class Contact <<value object>> {
+    type : ContactType
+    value
+    description
+  }
+  class Service <<value object>> {
+    description
+  }
+  class AirportPhoto <<value object>> {
+    contentType
+  }
+  class AircraftCertification <<aggregate root>>
+  class ModelName <<value object>> {
+    name
+  }
+  enum AirportStatus {
+    OPERATIONAL
+    CLOSED
+    UNDER_MAINTENANCE
+  }
+}
+
+package "routes (partitioned: home replica + successor)" {
+  class Route <<aggregate root>> {
+    estimatedFlightTime
+    minimumRange
+    minimumCapacity
+    status : RouteStatus
+  }
+  class RouteHistory {
+    changeDescription
+    changedAt
+    changedBy
+  }
+  enum RouteStatus {
+    ACTIVE
+    INACTIVE
+  }
+}
+
+package "flightcopies (partitioned: home replica + successor)" {
+  class FlightCopy <<aggregate root>> {
+    id
+    departureDateTime
+    arrivalDateTime
+    status : FlightCopyStatus
+    originCode
+    destinationCode
+    aircraftRegistration
+    version
+  }
+  enum FlightCopyStatus {
+    SCHEDULED
+    DELAYED
+    IN_FLIGHT
+    COMPLETED
+    CANCELED
+  }
+}
+
+package "fleet (not stored: asked to aircraft-maintenance)" {
+  class AircraftInfo <<record>> {
+    registrationNumber
+    model
+    status
+    seatCapacity
+    range
+    fuelConsumptionPerDistanceUnit
+  }
+}
+
+Airport *-- "1" IataCode
+Airport *-- "1" Coordinates
+Airport *-- "1..*" Runway
+Airport *-- "*" Terminal
+Airport *-- "*" Gate
+Airport *-- "*" Contact
+Airport *-- "*" Service
+Airport *-- "*" AirportPhoto
+AircraftCertification --> "1" IataCode : airport
+AircraftCertification *-- "1" ModelName : model in aircraft-maintenance
+
+Route --> "1" IataCode : origin
+Route --> "1" IataCode : destination
+RouteHistory ..> Route : origin + destination
+
+FlightCopy ..> Route : origin + destination
+note right of FlightCopy
+  Copy of a flight owned by flight-ops (C5).
+  Only the identifiers of the route and
+  aircraft are kept, never the entities.
+end note
+@enduml

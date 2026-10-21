@@ -1,0 +1,37 @@
+@startuml sd_forwarding_get_route
+title Scenario: GET a route held by another replica, with one replica down
+
+autonumber
+actor "ATCC" as c
+participant "Entry (Envoy)" as e
+participant "airports-routes-0" as r0
+participant "airports-routes-1" as r1
+participant "airports-routes-2" as r2
+
+c -> e : GET /api/routes/OPO/LIS (JWT)
+e -> r0 : GET /api/routes/OPO/LIS
+r0 -> r0 : look up locally: not found\n(RouteNotFoundException)
+note right of r0
+  PeerForwardingAdvice: not forwarded yet
+  (no X-Peer-Forwarded), so ask every peer
+  in parallel (PeerClient)
+end note
+par
+  r0 -> r1 : GET /api/routes/OPO/LIS\nX-Peer-Forwarded, JWT, X-Correlation-Id
+  r1 -> r1 : look up locally: found
+  r1 --> r0 : 200 + route (ETag)
+else
+  r0 -> r2 : GET /api/routes/OPO/LIS\nX-Peer-Forwarded, JWT, X-Correlation-Id
+  r2 -x r0 : no answer (connect 0.5 s, read 2 s,\n1 retry, then circuit breaker)
+end
+r0 --> e : 200 + route, X-Data-Node: airports-routes-1
+e --> c : 200 + route
+
+== Alternatives ==
+note over r0
+  Every peer answers 404                   -> 404
+  No peer has it, but some did not answer  -> 503, Retry-After: 1,
+                                              X-Partial-Result: true, X-Unreachable-Peers
+  A forwarded request (X-Peer-Forwarded) is never forwarded again (no loops).
+end note
+@enduml
