@@ -636,6 +636,36 @@
               }
             }
           ]
+        },
+        {
+          "name": "Unknown route on airports-routes-2: 404 after asking every peer",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://{{node}}:{{ar_port_2}}/api/routes/ZZZ/YYY",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{atcc_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"not partial\", () => pm.expect(pm.response.headers.get(\"X-Partial-Result\")).to.not.eql(\"true\"));"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
@@ -1058,6 +1088,102 @@
               }
             }
           ]
+        },
+        {
+          "name": "Active routes by popularity (US214), on replica 0",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://{{node}}:{{ar_port_0}}/api/routes?status=active&sortBy=popularity",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{atcc_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"not partial\", () => pm.expect(pm.response.headers.get(\"X-Partial-Result\")).to.not.eql(\"true\"));",
+                  "pm.environment.set(\"active_routes\", JSON.stringify(pm.response.json(), (k, v) => k === \"_links\" ? undefined : v));",
+                  "console.log(pm.info.requestName, \"| X-Node-Id:\", pm.response.headers.get(\"X-Node-Id\"), \"| X-Data-Node:\", pm.response.headers.get(\"X-Data-Node\"), \"| X-Unreachable-Peers:\", pm.response.headers.get(\"X-Unreachable-Peers\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Active routes by popularity (US214), on replica 1",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://{{node}}:{{ar_port_1}}/api/routes?status=active&sortBy=popularity",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{atcc_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"not partial\", () => pm.expect(pm.response.headers.get(\"X-Partial-Result\")).to.not.eql(\"true\"));",
+                  "pm.test(\"same data as replica 0\", () => pm.expect(JSON.stringify(pm.response.json(), (k, v) => k === \"_links\" ? undefined : v)).to.eql(pm.environment.get(\"active_routes\")));",
+                  "console.log(pm.info.requestName, \"| X-Node-Id:\", pm.response.headers.get(\"X-Node-Id\"), \"| X-Data-Node:\", pm.response.headers.get(\"X-Data-Node\"), \"| X-Unreachable-Peers:\", pm.response.headers.get(\"X-Unreachable-Peers\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Active routes by popularity (US214), on replica 2",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://{{node}}:{{ar_port_2}}/api/routes?status=active&sortBy=popularity",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{atcc_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"not partial\", () => pm.expect(pm.response.headers.get(\"X-Partial-Result\")).to.not.eql(\"true\"));",
+                  "pm.test(\"same data as replica 0\", () => pm.expect(JSON.stringify(pm.response.json(), (k, v) => k === \"_links\" ? undefined : v)).to.eql(pm.environment.get(\"active_routes\")));",
+                  "console.log(pm.info.requestName, \"| X-Node-Id:\", pm.response.headers.get(\"X-Node-Id\"), \"| X-Data-Node:\", pm.response.headers.get(\"X-Data-Node\"), \"| X-Unreachable-Peers:\", pm.response.headers.get(\"X-Unreachable-Peers\"));"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
@@ -1164,6 +1290,140 @@
                 "exec": [
                   "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
                   "pm.test(\"answered by aircraft-maintenance-1\", () => pm.expect(pm.response.headers.get(\"X-Node-Id\")).to.eql(\"aircraft-maintenance-1\"));",
+                  "pm.test(\"held here: not forwarded\", () => pm.expect(pm.response.headers.has(\"X-Data-Node\")).to.be.false);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Clear an airport FAO left by an earlier run",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "http://{{node}}:{{ar_port_1}}/api/airports/FAO",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{operator_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"deleted or not there\", () => pm.expect(pm.response.code).to.be.oneOf([204, 404]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Register airport FAO on airports-routes-1",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "http://{{node}}:{{ar_port_1}}/api/airports",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{operator_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"iataCode\": \"FAO\",\n  \"name\": \"Faro Airport\",\n  \"city\": \"Faro\",\n  \"country\": \"Portugal\",\n  \"region\": \"Europe\",\n  \"timezone\": \"Europe/Lisbon\",\n  \"latitude\": 37.0144,\n  \"longitude\": -7.9659,\n  \"runways\": [\n    {\n      \"name\": \"10/28\",\n      \"length\": 2490,\n      \"orientation\": \"100/280\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Read it on airports-routes-0 (its own copy)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://{{node}}:{{ar_port_0}}/api/airports/FAO",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{operator_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"answered by airports-routes-0\", () => pm.expect(pm.response.headers.get(\"X-Node-Id\")).to.eql(\"airports-routes-0\"));",
+                  "pm.test(\"held here: not forwarded\", () => pm.expect(pm.response.headers.has(\"X-Data-Node\")).to.be.false);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Read it on airports-routes-2 (its own copy)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://{{node}}:{{ar_port_2}}/api/airports/FAO",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{operator_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"answered by airports-routes-2\", () => pm.expect(pm.response.headers.get(\"X-Node-Id\")).to.eql(\"airports-routes-2\"));",
                   "pm.test(\"held here: not forwarded\", () => pm.expect(pm.response.headers.has(\"X-Data-Node\")).to.be.false);"
                 ]
               }
@@ -1319,6 +1579,35 @@
               }
             }
           ]
+        },
+        {
+          "name": "Fuel efficiency of CS-TKA on LIS-OPO (US227, C1)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://{{ar_vip}}/api/routes/LIS/OPO/fuel-efficiency?aircraft=CS-TKA",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{atcc_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
@@ -1390,12 +1679,41 @@
               }
             }
           ]
+        },
+        {
+          "name": "Operator cannot see compatible routes (ATCC only): 403",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://{{ar_vip}}/api/routes/compatible?aircraft=CS-TKA",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{operator_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 403\", () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
     {
       "name": "7. Failures: with a replica down",
-      "description": "Stop a replica before running this folder, for example the one holding the copy of the sample data:\n\n    kubectl -n aisafe delete pod aircraft-maintenance-1 --wait=false\n\nor turn off its machine in Proxmox. The requests still succeed through the other replicas (the replica that does not answer appears in X-Unreachable-Peers). They also pass with every replica up.",
+      "description": "Stop a replica before running this folder, for example the one holding the copy of the sample data:\n\n    kubectl -n aisafe delete pod aircraft-maintenance-1 airports-routes-1 --wait=false\n\nor turn off its machine in Proxmox. The requests still succeed through the other replicas (the replica that does not answer appears in X-Unreachable-Peers). They also pass with every replica up.",
       "item": [
         {
           "name": "CS-TKA on aircraft-maintenance-2",
@@ -1524,6 +1842,68 @@
               }
             }
           ]
+        },
+        {
+          "name": "Route OPO-LHR on airports-routes-2",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://{{node}}:{{ar_port_2}}/api/routes/OPO/LHR",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{atcc_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "console.log(pm.info.requestName, \"| X-Node-Id:\", pm.response.headers.get(\"X-Node-Id\"), \"| X-Data-Node:\", pm.response.headers.get(\"X-Data-Node\"), \"| X-Unreachable-Peers:\", pm.response.headers.get(\"X-Unreachable-Peers\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Routes through the virtual IP: complete",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://{{ar_vip}}/api/routes/search?size=1000",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{atcc_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"not partial\", () => pm.expect(pm.response.headers.get(\"X-Partial-Result\")).to.not.eql(\"true\"));",
+                  "pm.test(\"route OPO-LHR\", () => pm.expect(Object.values(pm.response.json()._embedded || {}).flat().some(r => r.originIataCode === \"OPO\" && r.destinationIataCode === \"LHR\")).to.be.true);",
+                  "console.log(pm.info.requestName, \"| X-Node-Id:\", pm.response.headers.get(\"X-Node-Id\"), \"| X-Data-Node:\", pm.response.headers.get(\"X-Data-Node\"), \"| X-Unreachable-Peers:\", pm.response.headers.get(\"X-Unreachable-Peers\"));"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
@@ -1613,6 +1993,64 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test(\"status 204\", () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete airport FAO through airports-routes-2",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "http://{{node}}:{{ar_port_2}}/api/airports/FAO",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{operator_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 204\", () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Airport FAO gone from airports-routes-0 too",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://{{node}}:{{ar_port_0}}/api/airports/FAO",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{operator_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 404\", () => pm.response.to.have.status(404));"
                 ]
               }
             }

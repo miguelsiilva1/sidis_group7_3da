@@ -101,6 +101,9 @@ Robustness (`PeerClient`): peers asked in parallel; 0.5 s to connect, 2 s to ans
 backoff; circuit breaker per peer (3 failures → skipped for 10 s, closed as soon as that peer
 contacts this replica again). Every attempt is logged with the replica and the correlation id.
 
+These cases are tested end to end by the [Postman collection](../postman/README.md) (folders 1, 2,
+3, 4, 7 and 8 for airports-routes).
+
 ### 6.2 US203 compatible routes: another service and every replica
 
 ![US203](svg/sd_us203_compatible_routes.svg)

@@ -11,6 +11,8 @@ consistency model, fault tolerance, security and the flight scheduling Saga.
 
 Deployment: [`../deploy/README.md`](../deploy/README.md).
 
+Tests (Postman): [`postman/README.md`](postman/README.md).
+
 ## Per service
 
 | Service | Documentation |
