@@ -197,4 +197,5 @@ Use the `-l` flag to preview which files would be converted without actually gen
 
 ## Documentation
 
-Full internal documentation - use cases, glossary, FURPS+, domain model, Postman collection, and client Q&A - is available at [`docs/README.md`](docs/README.md).
+- Distributed system (SIDIS): [`docs/README.md`](docs/README.md).
+- PSOFT monolith - use cases, glossary, FURPS+, domain model, Postman collection, and client Q&A: [`docs_monolith/README.md`](docs_monolith/README.md).

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Validates the docs/ folder structure.
+"""Validates the docs_monolith/ folder structure (the documentation of the PSOFT monolith).
 
 Expected layout:
-  docs/
+  docs_monolith/
     README.md
     system-documentation/
       global-artifacts/
@@ -60,7 +60,7 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-DOCS_ROOT = REPO_ROOT / "docs"
+DOCS_ROOT = REPO_ROOT / "docs_monolith"
 GLOBAL_ARTIFACTS = DOCS_ROOT / "system-documentation" / "global-artifacts"
 USE_CASES_ROOT = DOCS_ROOT / "system-documentation" / "use-cases"
 
@@ -167,32 +167,32 @@ def main() -> int:
     failures = {}
 
     if not (DOCS_ROOT / "README.md").is_file():
-        failures["docs/"] = ["missing file: README.md"]
+        failures["docs_monolith/"] = ["missing file: README.md"]
 
     for name in (e.name for e in sorted(DOCS_ROOT.iterdir()) if e.is_dir()):
         if name == "use-cases" or WP_PATTERN.match(name) or US_PATTERN.match(name):
-            failures.setdefault("docs/", []).append(f"unexpected directory: {name}/")
+            failures.setdefault("docs_monolith/", []).append(f"unexpected directory: {name}/")
 
     sys_doc = DOCS_ROOT / "system-documentation"
     if not sys_doc.is_dir():
-        failures["docs/system-documentation/"] = ["directory does not exist"]
+        failures["docs_monolith/system-documentation/"] = ["directory does not exist"]
         _report(failures)
         return 1
 
     for name in _unexpected_dirs(sys_doc, {"global-artifacts", "use-cases"}):
-        failures.setdefault("docs/system-documentation/", []).append(
+        failures.setdefault("docs_monolith/system-documentation/", []).append(
             f"unexpected directory: {name}/"
         )
 
     if not GLOBAL_ARTIFACTS.is_dir():
-        failures["docs/system-documentation/global-artifacts/"] = ["directory does not exist"]
+        failures["docs_monolith/system-documentation/global-artifacts/"] = ["directory does not exist"]
     else:
         errs = check_global_artifacts(GLOBAL_ARTIFACTS)
         if errs:
-            failures["docs/system-documentation/global-artifacts/"] = errs
+            failures["docs_monolith/system-documentation/global-artifacts/"] = errs
 
     if not USE_CASES_ROOT.is_dir():
-        failures["docs/system-documentation/use-cases/"] = ["directory does not exist"]
+        failures["docs_monolith/system-documentation/use-cases/"] = ["directory does not exist"]
     else:
         allowed_uc_top = {"BONUS", "EXTRAS"}
         
@@ -202,12 +202,12 @@ def main() -> int:
                 
             if wp.name in allowed_uc_top:
                 for rel, errs in check_wp(wp, require_ucd=False).items():
-                    failures[f"docs/system-documentation/use-cases/{rel}/"] = errs
+                    failures[f"docs_monolith/system-documentation/use-cases/{rel}/"] = errs
             elif WP_PATTERN.match(wp.name):
                 for rel, errs in check_wp(wp).items():
-                    failures[f"docs/system-documentation/use-cases/{rel}/"] = errs
+                    failures[f"docs_monolith/system-documentation/use-cases/{rel}/"] = errs
             else:
-                failures.setdefault("docs/system-documentation/use-cases/", []).append(
+                failures.setdefault("docs_monolith/system-documentation/use-cases/", []).append(
                     f"unexpected directory: {wp.name}/"
                 )
 
@@ -215,12 +215,12 @@ def main() -> int:
         _report(failures)
         return 1
 
-    print("docs structure check passed.")
+    print("docs_monolith structure check passed.")
     return 0
 
 
 def _report(failures: dict) -> None:
-    print("docs structure check FAILED \u2014 issues found:")
+    print("docs_monolith structure check FAILED \u2014 issues found:")
     for path, errs in failures.items():
         print(f"\n  {path}")
         for e in errs:

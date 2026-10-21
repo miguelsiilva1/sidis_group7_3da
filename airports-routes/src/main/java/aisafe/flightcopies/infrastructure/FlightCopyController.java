@@ -12,7 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 /**
- * Internal route used by flight-ops to send the copy of each flight (contract C4).
+ * Internal route used by flight-ops to send the copy of each flight (contract C5).
  */
 @RestController
 @RequestMapping("/internal/flights")
@@ -25,12 +25,12 @@ public class FlightCopyController {
         this.recordFlightCopy = recordFlightCopy;
     }
 
-    @Operation(summary = "Store the copy of a flight", description = "Command sent by flight-ops whenever a flight is created or changed. Idempotent: a repeated or older copy changes nothing. For a new future flight, it is the 'reserve the aircraft' step of the scheduling Saga. (C4)")
+    @Operation(summary = "Store the copy of a flight", description = "Command sent by flight-ops whenever a flight is created or changed. Idempotent: a repeated or older copy changes nothing. For a new future flight, it is the 'confirm the route' step of the scheduling Saga. (C5)")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Copy stored (or an equal or newer one was already stored)"),
             @ApiResponse(responseCode = "400", description = "Invalid copy"),
-            @ApiResponse(responseCode = "404", description = "The aircraft does not exist"),
-            @ApiResponse(responseCode = "409", description = "The aircraft cannot take a new flight")
+            @ApiResponse(responseCode = "404", description = "The route does not exist"),
+            @ApiResponse(responseCode = "409", description = "The route is not active, so it cannot take a new flight")
     })
     @PutMapping("/{id}")
     public ResponseEntity<FlightCopyResponse> putFlightCopy(@PathVariable String id,

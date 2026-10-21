@@ -1,0 +1,40 @@
+@startuml sd_c5_flight_copy
+title Scenario: C5 copy of a flight (the "confirm the route" step of the scheduling Saga)
+
+autonumber
+participant "flight-ops" as fo
+participant "airports-routes-0\nFlightCopyController" as ctl
+participant "RecordFlightCopy\nUseCase" as uc
+database "DB replica 0" as db
+participant "airports-routes-1, -2" as peers
+
+fo -> ctl : PUT /internal/flights/{id}\n{route, aircraft, times, status, version}
+ctl -> uc : execute(copy)
+uc -> db : copy with this id?
+alt same or newer version already stored
+  uc --> fo : 200 (idempotent: nothing changes)
+else new copy of a future flight (SCHEDULED or DELAYED)
+  uc -> db : route OPO-LIS held here?
+  opt not held here
+    uc -> peers : GET /internal/routes/OPO/LIS (C2, first answer)
+    peers --> uc : route status
+  end
+  alt route does not exist
+    uc --> fo : 404
+  else route not ACTIVE
+    uc --> fo : 409 (flight-ops runs the compensations)
+  else route ACTIVE
+    uc -> db : save copy
+    db -> peers : replicate to the successor (outbox)
+    uc --> fo : 200
+  end
+else newer version (status change, CANCELED by a compensation)
+  uc -> db : save copy (no route check)
+  uc --> fo : 200
+end
+
+note over fo, peers
+  The copies are used by US214 (route popularity = flights per route),
+  counted over every replica (FlightCopiesAcrossReplicas).
+end note
+@enduml

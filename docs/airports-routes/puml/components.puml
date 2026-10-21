@@ -1,0 +1,39 @@
+@startuml components
+!include <C4/C4_Component>
+
+title airports-routes - Components (C4 level 3)
+
+Person(user, "ATCC / Backoffice Operator")
+Container_Ext(flightOps, "flight-ops", "Spring Boot", "Schedules flights")
+Container_Ext(aircraftMaintenance, "aircraft-maintenance", "Spring Boot", "Owns aircraft and aircraft models")
+Container_Ext(peers, "Other airports-routes replicas", "Spring Boot", "Same components, own database")
+
+Container_Boundary(svc, "airports-routes (one replica)") {
+  Component(airportCtl, "AirportController", "REST", "/api/airports: US106-109, US106a, US207-211, US225")
+  Component(routeCtl, "RouteController / NetworkController", "REST", "/api/routes, /api/network: US110-114, US203, US212-216, US227-228")
+  Component(internalCtl, "RouteInternalController / FlightCopyController", "REST", "C2 and C5, used by flight-ops")
+  Component(useCases, "Use cases", "@UseCase", "One class per user action (application layer)")
+  Component(fleet, "Fleet (HttpFleet)", "RestClient", "Asks aircraft-maintenance (C1, C3); 503 when it does not answer")
+  Component(across, "RoutesAcrossReplicas / FlightCopiesAcrossReplicas", "ReplicaGatherer", "Every route or flight copy, from all replicas, newest version of each")
+  Component(forwarding, "PeerForwardingAdvice + PeerClient", "common", "Forwards a request this replica cannot answer to the peers")
+  Component(replication, "Replicator, OutboxDispatcher, ReplicaSync", "common", "Copies writes to other replicas; periodic sync")
+  Component(repos, "JPA repositories", "Spring Data", "Airports, certifications, routes, route history, flight copies")
+}
+ContainerDb(db, "Replica database", "H2 file", "Own data of this replica")
+
+Rel(user, airportCtl, "HTTP/REST, JWT")
+Rel(user, routeCtl, "HTTP/REST, JWT")
+Rel(flightOps, internalCtl, "C2, C5", "HTTP/REST")
+Rel(airportCtl, useCases, "calls")
+Rel(routeCtl, useCases, "calls")
+Rel(internalCtl, useCases, "calls")
+Rel(useCases, repos, "local data")
+Rel(useCases, across, "listings, reports")
+Rel(useCases, fleet, "US106a, US203, US227")
+Rel(fleet, aircraftMaintenance, "C1, C3", "HTTP/REST")
+Rel(across, peers, "GET /internal/replicas/{type}", "HTTP/REST")
+Rel(forwarding, peers, "same request + X-Peer-Forwarded", "HTTP/REST")
+Rel(repos, replication, "on save/delete")
+Rel(replication, peers, "PUT /internal/replicas/{type}", "HTTP/REST")
+Rel(repos, db, "JDBC")
+@enduml

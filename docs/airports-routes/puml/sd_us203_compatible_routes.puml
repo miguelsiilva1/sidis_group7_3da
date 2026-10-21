@@ -1,0 +1,37 @@
+@startuml sd_us203_compatible_routes
+title Scenario: US203 compatible routes (another service + every replica)
+
+autonumber
+actor "ATCC" as c
+participant "airports-routes-0\nRouteController" as ctl
+participant "ViewCompatible\nRoutesUseCase" as uc
+participant "HttpFleet" as fleet
+participant "Entry (Envoy)\nsame VM" as e
+participant "aircraft-maintenance" as am
+participant "GatheredRoutes\n(ReplicaGatherer)" as g
+participant "airports-routes-1, -2" as peers
+
+c -> ctl : GET /api/routes/compatible?aircraft=CS-TKA (JWT)
+ctl -> uc : execute("CS-TKA")
+uc -> fleet : findAircraft("CS-TKA")
+fleet -> e : C1: GET /internal/aircrafts/CS-TKA\n(user's JWT, X-Correlation-Id)
+e -> am : to a ready replica\n(it asks its own peers if needed)
+alt aircraft exists
+  am --> fleet : 200 {seatCapacity, range, ...}
+else aircraft does not exist
+  am --> fleet : 404
+  fleet --> uc : empty
+  uc --> c : 404 Aircraft not found
+else aircraft-maintenance does not answer
+  fleet --> uc : FleetUnavailableException
+  uc --> c : 503, Retry-After: 1\n(never a 404 for an aircraft that may exist)
+end
+uc -> g : findAll()
+g -> g : local routes
+g -> peers : GET /internal/replicas/routes (service token)
+peers --> g : their routes (with version)
+g --> uc : every route once (newest version)
+uc -> uc : keep ACTIVE routes with\nminimumRange <= range and\nminimumCapacity <= seatCapacity
+uc --> ctl : compatible routes
+ctl --> c : 200 (+ X-Unreachable-Peers if a replica did not answer)
+@enduml

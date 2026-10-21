@@ -1,0 +1,42 @@
+@startuml logical-view
+title airports-routes - Logical view, level 1 (UML components)
+
+skinparam componentStyle uml2
+skinparam shadowing false
+
+actor "Client\n(ATCC, Backoffice Operator)" as client
+component "flight-ops" as fo
+component "Entry (Envoy)" as envoy
+
+interface "/api/airports\n/api/routes\n/api/network" as publicApi
+interface "C2: GET /internal/routes/{o}/{d}\nC5: PUT /internal/flights/{id}" as internalApi
+
+package "airports-routes" {
+  component "airports-routes-0" <<instance>> as r0
+  component "airports-routes-1" <<instance>> as r1
+  component "airports-routes-2" <<instance>> as r2
+}
+
+component "aircraft-maintenance" as am
+interface "C1: GET /internal/aircrafts/{reg}\nC3: GET /internal/aircraft-models/{name}" as amApi
+
+client ..> envoy : HTTP/REST + JWT
+envoy ..> publicApi : to a ready replica
+fo ..> internalApi : HTTP/REST + JWT
+
+publicApi - r0
+internalApi - r0
+
+r0 <..> r1 : P2P: forwarding,\nreplication, sync\n(/internal/replicas/**)
+r1 <..> r2 : P2P
+r0 <..> r2 : P2P
+
+r0 ..> amApi : HTTP/REST + JWT\n(entry of the same VM)
+amApi - am
+
+note right of r2
+  The three instances offer and require the same
+  interfaces (drawn on airports-routes-0 only).
+  Each instance has its own H2 database.
+end note
+@enduml

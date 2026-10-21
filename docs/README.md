@@ -1,44 +1,21 @@
-# AISafe - Documentation
+# AISafe - Distributed System Documentation
 
-AISafe exposes a REST API (Spring Boot) for managing aircraft, airports, flight routes, and maintenance records.
+Documentation of the distributed version of AISafe (SIDIS, Assignment 1). The documentation of the
+original PSOFT monolith (use cases, glossary, FURPS+, domain model) is in
+[`../docs_monolith/`](../docs_monolith/README.md).
 
----
+## Whole system
 
-## Navigation
+To be written by the group: context and container views (C4 levels 1 and 2), physical view,
+consistency model, fault tolerance, security and the flight scheduling Saga.
 
-| Resource                                                    | Description                                                  |
-| ----------------------------------------------------------- | ------------------------------------------------------------ |
-| [Team Members & Task Distribution](TeamMembersAndTasks.md)  | Who owns each User Story and work package                    |
-| [System Documentation](system-documentation)                | Architecture, domain model, and use-case artefacts           |
-| [Global Artefacts](system-documentation/global-artifacts)   | Glossary, FURPS+, and domain model diagrams                  |
-| [Use Cases](system-documentation/use-cases)                 | Per-WP folders with sequence diagrams (SD/SSD)               |
-| [Client Q&A](client-questions)                              | Clarifications obtained from the client, organised by domain |
-| [Postman Collection](postman/psoft.postman_collection.json) | Ready-to-import collection covering all API endpoints        |
+Deployment: [`../deploy/README.md`](../deploy/README.md).
 
----
+## Per service
 
-## Work Packages
-
-| WP    | Domain                                            | Owner           |
-| ----- | ------------------------------------------------- | --------------- |
-| WP#1A | Aircraft Models & Aircraft                        | Vasco Magolo    |
-| WP#1B | Aircraft Analytics & Fleet Status                 | Vasco Magolo    |
-| WP#2A | Airports (core)                                   | Diogo Nogueira  |
-| WP#2B | Airports (extended - facilities, stats, grouping) | Diogo Nogueira  |
-| WP#3A | Flight Routes                                     | Pedro Guilherme |
-| WP#3B | Flight Scheduling & Network                       | Pedro Guilherme |
-| WP#4A | Maintenance Records & Templates                   | Shared          |
-| WP#4B | Maintenance Analytics & Reporting                 | Shared          |
-
----
-
-## Running the API
-
-```bash
-./mvnw spring-boot:run
-```
-
-- Swagger UI: `http://localhost:8080/swagger-ui/index.html`
-- OpenAPI spec: `http://localhost:8080/v3/api-docs`
-- Custom HTML Docs: `http://localhost:8080/docs.html`
-- H2 console: `http://localhost:8080/h2-console` (JDBC URL: `jdbc:h2:mem:aisafedb`)
+| Service | Documentation |
+|---|---|
+| airports-routes | [`airports-routes/README.md`](airports-routes/README.md) |
+| aircraft-maintenance | - |
+| flight-ops | - |
+| login | - |
