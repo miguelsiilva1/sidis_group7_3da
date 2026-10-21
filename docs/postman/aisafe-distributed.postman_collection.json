@@ -1,0 +1,1682 @@
+{
+  "info": {
+    "_postman_id": "dc4b234f-d8b4-5d6d-acce-da8372c9f7cb",
+    "name": "AISafe distributed",
+    "description": "End-to-end tests of the distributed AISafe: every replica up, local access, forwarding between replicas, aggregation, catalogs, calls between services, roles and failures. Select the environment \"AISafe k3s\" and run the folders in order (or the whole collection). See docs/postman/README.md.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "0. Setup: logins and every replica ready",
+      "description": "Logs in with one user per role (the login virtual IP picks any of the 3 logins) and checks that the 3 replicas of each service are up. Run this folder first.",
+      "item": [
+        {
+          "name": "Login as atcc",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "http://{{login_vip}}/api/auth/login",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"atcc\",\n  \"password\": \"atcc123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.environment.set(\"atcc_token\", pm.response.json().token);",
+                  "pm.test(\"token returned\", () => pm.expect(pm.response.json().token).to.be.a(\"string\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login as operator",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "http://{{login_vip}}/api/auth/login",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"operator\",\n  \"password\": \"operator123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.environment.set(\"operator_token\", pm.response.json().token);",
+                  "pm.test(\"token returned\", () => pm.expect(pm.response.json().token).to.be.a(\"string\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login as technician",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "http://{{login_vip}}/api/auth/login",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"technician\",\n  \"password\": \"technician123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.environment.set(\"technician_token\", pm.response.json().token);",
+                  "pm.test(\"token returned\", () => pm.expect(pm.response.json().token).to.be.a(\"string\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login as supervisor",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "http://{{login_vip}}/api/auth/login",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"supervisor\",\n  \"password\": \"supervisor123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.environment.set(\"supervisor_token\", pm.response.json().token);",
+                  "pm.test(\"token returned\", () => pm.expect(pm.response.json().token).to.be.a(\"string\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "aircraft-maintenance-0 is ready",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://{{node}}:{{am_port_0}}/actuator/health/readiness",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"UP\", () => pm.expect(pm.response.json().status).to.eql(\"UP\"));",
+                  "pm.test(\"answered by aircraft-maintenance-0\", () => pm.expect(pm.response.headers.get(\"X-Node-Id\")).to.eql(\"aircraft-maintenance-0\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "aircraft-maintenance-1 is ready",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://{{node}}:{{am_port_1}}/actuator/health/readiness",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"UP\", () => pm.expect(pm.response.json().status).to.eql(\"UP\"));",
+                  "pm.test(\"answered by aircraft-maintenance-1\", () => pm.expect(pm.response.headers.get(\"X-Node-Id\")).to.eql(\"aircraft-maintenance-1\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "aircraft-maintenance-2 is ready",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://{{node}}:{{am_port_2}}/actuator/health/readiness",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"UP\", () => pm.expect(pm.response.json().status).to.eql(\"UP\"));",
+                  "pm.test(\"answered by aircraft-maintenance-2\", () => pm.expect(pm.response.headers.get(\"X-Node-Id\")).to.eql(\"aircraft-maintenance-2\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "airports-routes-0 is ready",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://{{node}}:{{ar_port_0}}/actuator/health/readiness",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"UP\", () => pm.expect(pm.response.json().status).to.eql(\"UP\"));",
+                  "pm.test(\"answered by airports-routes-0\", () => pm.expect(pm.response.headers.get(\"X-Node-Id\")).to.eql(\"airports-routes-0\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "airports-routes-1 is ready",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://{{node}}:{{ar_port_1}}/actuator/health/readiness",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"UP\", () => pm.expect(pm.response.json().status).to.eql(\"UP\"));",
+                  "pm.test(\"answered by airports-routes-1\", () => pm.expect(pm.response.headers.get(\"X-Node-Id\")).to.eql(\"airports-routes-1\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "airports-routes-2 is ready",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://{{node}}:{{ar_port_2}}/actuator/health/readiness",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"UP\", () => pm.expect(pm.response.json().status).to.eql(\"UP\"));",
+                  "pm.test(\"answered by airports-routes-2\", () => pm.expect(pm.response.headers.get(\"X-Node-Id\")).to.eql(\"airports-routes-2\"));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "1. Local access",
+      "description": "Data held by the replica that is asked: answered locally, without asking its peers. The sample data is loaded by replica 0 of each service.",
+      "item": [
+        {
+          "name": "Aircraft CS-TKA on aircraft-maintenance-0",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://{{node}}:{{am_port_0}}/api/aircrafts/CS-TKA",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{atcc_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"answered by aircraft-maintenance-0\", () => pm.expect(pm.response.headers.get(\"X-Node-Id\")).to.eql(\"aircraft-maintenance-0\"));",
+                  "pm.test(\"held here: not forwarded\", () => pm.expect(pm.response.headers.has(\"X-Data-Node\")).to.be.false);",
+                  "pm.test(\"CS-TKA\", () => pm.expect(pm.response.json().registrationNumber).to.eql(\"CS-TKA\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Route LIS-OPO on airports-routes-0",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://{{node}}:{{ar_port_0}}/api/routes/LIS/OPO",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{atcc_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"answered by airports-routes-0\", () => pm.expect(pm.response.headers.get(\"X-Node-Id\")).to.eql(\"airports-routes-0\"));",
+                  "pm.test(\"held here: not forwarded\", () => pm.expect(pm.response.headers.has(\"X-Data-Node\")).to.be.false);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. Forwarding between replicas (peer-to-peer)",
+      "description": "A record lives on the replica that created it (its home) and on the next one (its copy). A replica without it asks its peers, and the answer says which replica held it (X-Data-Node). The logs of the replica show each attempt: kubectl -n aisafe logs aircraft-maintenance-2 | grep forwarded",
+      "item": [
+        {
+          "name": "Create an aircraft on aircraft-maintenance-0",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "http://{{node}}:{{am_port_0}}/api/aircrafts",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{atcc_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"registrationNumber\": \"{{registration}}\",\n  \"modelName\": \"Airbus A320neo\",\n  \"manufacturingDate\": \"2021-05-01\",\n  \"seatCapacity\": 150,\n  \"range\": 5000.0,\n  \"status\": \"AVAILABLE\",\n  \"features\": [\n    \"WiFi\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "{",
+                  "  const letters = \"ABCDEFGHIJKLMNOPQRSTUVWXYZ\";",
+                  "  const pick = n => Array.from({length: n}, () => letters[Math.floor(Math.random() * 26)]).join(\"\");",
+                  "  pm.environment.set(\"registration\", \"PM-\" + pick(3));",
+                  "  pm.environment.set(\"model\", \"Postman Model \" + pick(5));",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"answered by aircraft-maintenance-0\", () => pm.expect(pm.response.headers.get(\"X-Node-Id\")).to.eql(\"aircraft-maintenance-0\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Read it on aircraft-maintenance-1 (holds the copy)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://{{node}}:{{am_port_1}}/api/aircrafts/{{registration}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{atcc_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"answered by aircraft-maintenance-1\", () => pm.expect(pm.response.headers.get(\"X-Node-Id\")).to.eql(\"aircraft-maintenance-1\"));",
+                  "pm.test(\"held here: not forwarded\", () => pm.expect(pm.response.headers.has(\"X-Data-Node\")).to.be.false);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Read it on aircraft-maintenance-2 (forwarded)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://{{node}}:{{am_port_2}}/api/aircrafts/{{registration}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{atcc_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"answered by aircraft-maintenance-2\", () => pm.expect(pm.response.headers.get(\"X-Node-Id\")).to.eql(\"aircraft-maintenance-2\"));",
+                  "pm.test(\"forwarded to a replica that holds it\", () => pm.expect(pm.response.headers.get(\"X-Data-Node\")).to.be.oneOf([\"aircraft-maintenance-0\", \"aircraft-maintenance-1\"]));",
+                  "pm.test(\"same aircraft\", () => pm.expect(pm.response.json().registrationNumber).to.eql(pm.environment.get(\"registration\")));",
+                  "console.log(pm.info.requestName, \"| X-Node-Id:\", pm.response.headers.get(\"X-Node-Id\"), \"| X-Data-Node:\", pm.response.headers.get(\"X-Data-Node\"), \"| X-Unreachable-Peers:\", pm.response.headers.get(\"X-Unreachable-Peers\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Unknown aircraft on aircraft-maintenance-2: 404 after asking every peer",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://{{node}}:{{am_port_2}}/api/aircrafts/ZZ-QQQ",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{atcc_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"not partial\", () => pm.expect(pm.response.headers.get(\"X-Partial-Result\")).to.not.eql(\"true\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Clear a route OPO-LHR left by an earlier run",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "http://{{node}}:{{ar_port_0}}/api/routes/OPO/LHR",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{atcc_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"deleted or not there\", () => pm.expect(pm.response.code).to.be.oneOf([204, 404]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create route OPO-LHR on airports-routes-0",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "http://{{node}}:{{ar_port_0}}/api/routes",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{atcc_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"originIataCode\": \"OPO\",\n  \"destinationIataCode\": \"LHR\",\n  \"estimatedFlightTime\": 140,\n  \"minimumRange\": 1500.0,\n  \"minimumCapacity\": 120,\n  \"createdBy\": \"postman\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Read it on airports-routes-2 (forwarded)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://{{node}}:{{ar_port_2}}/api/routes/OPO/LHR",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{atcc_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"answered by airports-routes-2\", () => pm.expect(pm.response.headers.get(\"X-Node-Id\")).to.eql(\"airports-routes-2\"));",
+                  "pm.test(\"forwarded to a replica that holds it\", () => pm.expect(pm.response.headers.get(\"X-Data-Node\")).to.be.oneOf([\"airports-routes-0\", \"airports-routes-1\"]));",
+                  "console.log(pm.info.requestName, \"| X-Node-Id:\", pm.response.headers.get(\"X-Node-Id\"), \"| X-Data-Node:\", pm.response.headers.get(\"X-Data-Node\"), \"| X-Unreachable-Peers:\", pm.response.headers.get(\"X-Unreachable-Peers\"));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3. Aggregation: lists and reports over every replica",
+      "description": "Lists and reports gather the raw data of the 3 replicas, keep one copy of each record and compute once: every replica gives the same answer, and the list holds records from every home.",
+      "item": [
+        {
+          "name": "List of aircraft through the virtual IP",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://{{am_vip}}/api/aircrafts?size=1000",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{atcc_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"not partial\", () => pm.expect(pm.response.headers.get(\"X-Partial-Result\")).to.not.eql(\"true\"));",
+                  "pm.test(\"sample aircraft and the one created here\", () => { const t = pm.response.text(); [\"CS-TKA\", \"CS-TKB\", \"CS-TKC\", pm.environment.get(\"registration\")].forEach(r => pm.expect(t).to.include(r)); });",
+                  "console.log(pm.info.requestName, \"| X-Node-Id:\", pm.response.headers.get(\"X-Node-Id\"), \"| X-Data-Node:\", pm.response.headers.get(\"X-Data-Node\"), \"| X-Unreachable-Peers:\", pm.response.headers.get(\"X-Unreachable-Peers\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Aircraft count, on replica 0",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://{{node}}:{{am_port_0}}/api/aircrafts?size=1",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{atcc_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"not partial\", () => pm.expect(pm.response.headers.get(\"X-Partial-Result\")).to.not.eql(\"true\"));",
+                  "pm.environment.set(\"aircraft_count\", JSON.stringify(pm.response.json(), (k, v) => k === \"_links\" ? undefined : v));",
+                  "console.log(pm.info.requestName, \"| X-Node-Id:\", pm.response.headers.get(\"X-Node-Id\"), \"| X-Data-Node:\", pm.response.headers.get(\"X-Data-Node\"), \"| X-Unreachable-Peers:\", pm.response.headers.get(\"X-Unreachable-Peers\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Aircraft count, on replica 1",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://{{node}}:{{am_port_1}}/api/aircrafts?size=1",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{atcc_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"not partial\", () => pm.expect(pm.response.headers.get(\"X-Partial-Result\")).to.not.eql(\"true\"));",
+                  "pm.test(\"same data as replica 0\", () => pm.expect(JSON.stringify(pm.response.json(), (k, v) => k === \"_links\" ? undefined : v)).to.eql(pm.environment.get(\"aircraft_count\")));",
+                  "console.log(pm.info.requestName, \"| X-Node-Id:\", pm.response.headers.get(\"X-Node-Id\"), \"| X-Data-Node:\", pm.response.headers.get(\"X-Data-Node\"), \"| X-Unreachable-Peers:\", pm.response.headers.get(\"X-Unreachable-Peers\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Aircraft count, on replica 2",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://{{node}}:{{am_port_2}}/api/aircrafts?size=1",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{atcc_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"not partial\", () => pm.expect(pm.response.headers.get(\"X-Partial-Result\")).to.not.eql(\"true\"));",
+                  "pm.test(\"same data as replica 0\", () => pm.expect(JSON.stringify(pm.response.json(), (k, v) => k === \"_links\" ? undefined : v)).to.eql(pm.environment.get(\"aircraft_count\")));",
+                  "console.log(pm.info.requestName, \"| X-Node-Id:\", pm.response.headers.get(\"X-Node-Id\"), \"| X-Data-Node:\", pm.response.headers.get(\"X-Data-Node\"), \"| X-Unreachable-Peers:\", pm.response.headers.get(\"X-Unreachable-Peers\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Maintenance cost of CS-TKA (US220), on replica 0",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://{{node}}:{{am_port_0}}/api/maintenance/records/cost/aircraft/CS-TKA",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{supervisor_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"not partial\", () => pm.expect(pm.response.headers.get(\"X-Partial-Result\")).to.not.eql(\"true\"));",
+                  "pm.environment.set(\"cost_cs_tka\", JSON.stringify(pm.response.json(), (k, v) => k === \"_links\" ? undefined : v));",
+                  "console.log(pm.info.requestName, \"| X-Node-Id:\", pm.response.headers.get(\"X-Node-Id\"), \"| X-Data-Node:\", pm.response.headers.get(\"X-Data-Node\"), \"| X-Unreachable-Peers:\", pm.response.headers.get(\"X-Unreachable-Peers\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Maintenance cost of CS-TKA (US220), on replica 1",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://{{node}}:{{am_port_1}}/api/maintenance/records/cost/aircraft/CS-TKA",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{supervisor_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"not partial\", () => pm.expect(pm.response.headers.get(\"X-Partial-Result\")).to.not.eql(\"true\"));",
+                  "pm.test(\"same data as replica 0\", () => pm.expect(JSON.stringify(pm.response.json(), (k, v) => k === \"_links\" ? undefined : v)).to.eql(pm.environment.get(\"cost_cs_tka\")));",
+                  "console.log(pm.info.requestName, \"| X-Node-Id:\", pm.response.headers.get(\"X-Node-Id\"), \"| X-Data-Node:\", pm.response.headers.get(\"X-Data-Node\"), \"| X-Unreachable-Peers:\", pm.response.headers.get(\"X-Unreachable-Peers\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Maintenance cost of CS-TKA (US220), on replica 2",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://{{node}}:{{am_port_2}}/api/maintenance/records/cost/aircraft/CS-TKA",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{supervisor_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"not partial\", () => pm.expect(pm.response.headers.get(\"X-Partial-Result\")).to.not.eql(\"true\"));",
+                  "pm.test(\"same data as replica 0\", () => pm.expect(JSON.stringify(pm.response.json(), (k, v) => k === \"_links\" ? undefined : v)).to.eql(pm.environment.get(\"cost_cs_tka\")));",
+                  "console.log(pm.info.requestName, \"| X-Node-Id:\", pm.response.headers.get(\"X-Node-Id\"), \"| X-Data-Node:\", pm.response.headers.get(\"X-Data-Node\"), \"| X-Unreachable-Peers:\", pm.response.headers.get(\"X-Unreachable-Peers\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Maintenance hours of the fleet (US117), on replica 0",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://{{node}}:{{am_port_0}}/api/maintenance/records/hours",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{atcc_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"not partial\", () => pm.expect(pm.response.headers.get(\"X-Partial-Result\")).to.not.eql(\"true\"));",
+                  "pm.environment.set(\"fleet_hours\", JSON.stringify(pm.response.json(), (k, v) => k === \"_links\" ? undefined : v));",
+                  "console.log(pm.info.requestName, \"| X-Node-Id:\", pm.response.headers.get(\"X-Node-Id\"), \"| X-Data-Node:\", pm.response.headers.get(\"X-Data-Node\"), \"| X-Unreachable-Peers:\", pm.response.headers.get(\"X-Unreachable-Peers\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Maintenance hours of the fleet (US117), on replica 1",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://{{node}}:{{am_port_1}}/api/maintenance/records/hours",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{atcc_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"not partial\", () => pm.expect(pm.response.headers.get(\"X-Partial-Result\")).to.not.eql(\"true\"));",
+                  "pm.test(\"same data as replica 0\", () => pm.expect(JSON.stringify(pm.response.json(), (k, v) => k === \"_links\" ? undefined : v)).to.eql(pm.environment.get(\"fleet_hours\")));",
+                  "console.log(pm.info.requestName, \"| X-Node-Id:\", pm.response.headers.get(\"X-Node-Id\"), \"| X-Data-Node:\", pm.response.headers.get(\"X-Data-Node\"), \"| X-Unreachable-Peers:\", pm.response.headers.get(\"X-Unreachable-Peers\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Maintenance hours of the fleet (US117), on replica 2",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://{{node}}:{{am_port_2}}/api/maintenance/records/hours",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{atcc_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"not partial\", () => pm.expect(pm.response.headers.get(\"X-Partial-Result\")).to.not.eql(\"true\"));",
+                  "pm.test(\"same data as replica 0\", () => pm.expect(JSON.stringify(pm.response.json(), (k, v) => k === \"_links\" ? undefined : v)).to.eql(pm.environment.get(\"fleet_hours\")));",
+                  "console.log(pm.info.requestName, \"| X-Node-Id:\", pm.response.headers.get(\"X-Node-Id\"), \"| X-Data-Node:\", pm.response.headers.get(\"X-Data-Node\"), \"| X-Unreachable-Peers:\", pm.response.headers.get(\"X-Unreachable-Peers\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Routes (US114), on replica 0",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://{{node}}:{{ar_port_0}}/api/routes/search?size=1000",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{atcc_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"not partial\", () => pm.expect(pm.response.headers.get(\"X-Partial-Result\")).to.not.eql(\"true\"));",
+                  "pm.environment.set(\"routes\", JSON.stringify(pm.response.json(), (k, v) => k === \"_links\" ? undefined : v));",
+                  "console.log(pm.info.requestName, \"| X-Node-Id:\", pm.response.headers.get(\"X-Node-Id\"), \"| X-Data-Node:\", pm.response.headers.get(\"X-Data-Node\"), \"| X-Unreachable-Peers:\", pm.response.headers.get(\"X-Unreachable-Peers\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Routes (US114), on replica 1",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://{{node}}:{{ar_port_1}}/api/routes/search?size=1000",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{atcc_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"not partial\", () => pm.expect(pm.response.headers.get(\"X-Partial-Result\")).to.not.eql(\"true\"));",
+                  "pm.test(\"same data as replica 0\", () => pm.expect(JSON.stringify(pm.response.json(), (k, v) => k === \"_links\" ? undefined : v)).to.eql(pm.environment.get(\"routes\")));",
+                  "console.log(pm.info.requestName, \"| X-Node-Id:\", pm.response.headers.get(\"X-Node-Id\"), \"| X-Data-Node:\", pm.response.headers.get(\"X-Data-Node\"), \"| X-Unreachable-Peers:\", pm.response.headers.get(\"X-Unreachable-Peers\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Routes (US114), on replica 2",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://{{node}}:{{ar_port_2}}/api/routes/search?size=1000",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{atcc_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"not partial\", () => pm.expect(pm.response.headers.get(\"X-Partial-Result\")).to.not.eql(\"true\"));",
+                  "pm.test(\"same data as replica 0\", () => pm.expect(JSON.stringify(pm.response.json(), (k, v) => k === \"_links\" ? undefined : v)).to.eql(pm.environment.get(\"routes\")));",
+                  "console.log(pm.info.requestName, \"| X-Node-Id:\", pm.response.headers.get(\"X-Node-Id\"), \"| X-Data-Node:\", pm.response.headers.get(\"X-Data-Node\"), \"| X-Unreachable-Peers:\", pm.response.headers.get(\"X-Unreachable-Peers\"));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "4. Catalogs copied to every replica",
+      "description": "Aircraft models (like templates, parts, airports and accounts) are copied to every replica as soon as they change: each replica answers from its own copy.",
+      "item": [
+        {
+          "name": "Create an aircraft model on aircraft-maintenance-2",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "http://{{node}}:{{am_port_2}}/api/aircraftModels",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{operator_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"modelName\": \"{{model}}\",\n  \"manufacturer\": \"AIRBUS\",\n  \"maxRange\": 6000.0,\n  \"fuelCapacity\": 20000.0,\n  \"cruisingSpeed\": 830.0,\n  \"maximumSeatingCapacity\": 180\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Read it on aircraft-maintenance-0 (its own copy)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://{{node}}:{{am_port_0}}/api/aircraftModels/{{model}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{operator_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"answered by aircraft-maintenance-0\", () => pm.expect(pm.response.headers.get(\"X-Node-Id\")).to.eql(\"aircraft-maintenance-0\"));",
+                  "pm.test(\"held here: not forwarded\", () => pm.expect(pm.response.headers.has(\"X-Data-Node\")).to.be.false);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Read it on aircraft-maintenance-1 (its own copy)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://{{node}}:{{am_port_1}}/api/aircraftModels/{{model}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{operator_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"answered by aircraft-maintenance-1\", () => pm.expect(pm.response.headers.get(\"X-Node-Id\")).to.eql(\"aircraft-maintenance-1\"));",
+                  "pm.test(\"held here: not forwarded\", () => pm.expect(pm.response.headers.has(\"X-Data-Node\")).to.be.false);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "5. Between services: airports-routes asks aircraft-maintenance",
+      "description": "airports-routes asks aircraft-maintenance (through the entry of its own machine) whether a model or an aircraft exists: contracts C3 and C1.",
+      "item": [
+        {
+          "name": "Certify LIS for the new model (C3: the model exists)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "http://{{ar_vip}}/api/airports/LIS/certifications",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{operator_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"aircraftModelName\": \"{{model}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Certify LIS for a model that does not exist: 404",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "http://{{ar_vip}}/api/airports/LIS/certifications",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{operator_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"aircraftModelName\": \"No Such Model\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 404\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Routes CS-TKA can fly (US203, C1)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://{{ar_vip}}/api/routes/compatible?aircraft=CS-TKA",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{atcc_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Routes of an aircraft that does not exist: 404",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://{{ar_vip}}/api/routes/compatible?aircraft=ZZ-QQQ",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{atcc_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 404\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "6. Access control (roles)",
+      "description": "Every service checks the token issued by the login and the role it carries.",
+      "item": [
+        {
+          "name": "Technician cannot register an aircraft: 403",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "http://{{am_vip}}/api/aircrafts",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{technician_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"registrationNumber\": \"ZZ-QQQ\",\n  \"modelName\": \"Airbus A320neo\",\n  \"manufacturingDate\": \"2021-05-01\",\n  \"seatCapacity\": 150,\n  \"range\": 5000.0,\n  \"status\": \"AVAILABLE\",\n  \"features\": []\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 403\", () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "No token: 403",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://{{am_vip}}/api/aircrafts/CS-TKA",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 403\", () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "7. Failures: with a replica down",
+      "description": "Stop a replica before running this folder, for example the one holding the copy of the sample data:\n\n    kubectl -n aisafe delete pod aircraft-maintenance-1 --wait=false\n\nor turn off its machine in Proxmox. The requests still succeed through the other replicas (the replica that does not answer appears in X-Unreachable-Peers). They also pass with every replica up.",
+      "item": [
+        {
+          "name": "CS-TKA on aircraft-maintenance-2",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://{{node}}:{{am_port_2}}/api/aircrafts/CS-TKA",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{atcc_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "console.log(pm.info.requestName, \"| X-Node-Id:\", pm.response.headers.get(\"X-Node-Id\"), \"| X-Data-Node:\", pm.response.headers.get(\"X-Data-Node\"), \"| X-Unreachable-Peers:\", pm.response.headers.get(\"X-Unreachable-Peers\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "The aircraft created here, on aircraft-maintenance-2",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://{{node}}:{{am_port_2}}/api/aircrafts/{{registration}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{atcc_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "console.log(pm.info.requestName, \"| X-Node-Id:\", pm.response.headers.get(\"X-Node-Id\"), \"| X-Data-Node:\", pm.response.headers.get(\"X-Data-Node\"), \"| X-Unreachable-Peers:\", pm.response.headers.get(\"X-Unreachable-Peers\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List through the virtual IP: complete",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://{{am_vip}}/api/aircrafts?size=1000",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{atcc_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"not partial\", () => pm.expect(pm.response.headers.get(\"X-Partial-Result\")).to.not.eql(\"true\"));",
+                  "pm.test(\"sample aircraft\", () => [\"CS-TKA\", \"CS-TKB\", \"CS-TKC\"].forEach(r => pm.expect(pm.response.text()).to.include(r)));",
+                  "console.log(pm.info.requestName, \"| X-Node-Id:\", pm.response.headers.get(\"X-Node-Id\"), \"| X-Data-Node:\", pm.response.headers.get(\"X-Data-Node\"), \"| X-Unreachable-Peers:\", pm.response.headers.get(\"X-Unreachable-Peers\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login through the virtual IP",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "http://{{login_vip}}/api/auth/login",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"atcc\",\n  \"password\": \"atcc123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "8. Cleanup",
+      "description": "Deletes what this run created, so it can run again. The deletions are sent to replicas that do not hold the record: they forward them to one that does.",
+      "item": [
+        {
+          "name": "Delete the aircraft through aircraft-maintenance-2 (forwarded)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "http://{{node}}:{{am_port_2}}/api/aircrafts/{{registration}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{atcc_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 204\", () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Gone from aircraft-maintenance-0 too",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://{{node}}:{{am_port_0}}/api/aircrafts/{{registration}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{atcc_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 404\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete route OPO-LHR through airports-routes-2 (forwarded)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "http://{{node}}:{{ar_port_2}}/api/routes/OPO/LHR",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{atcc_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 204\", () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete the aircraft model through aircraft-maintenance-1",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "http://{{node}}:{{am_port_1}}/api/aircraftModels/{{model}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{operator_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 204\", () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Model gone from aircraft-maintenance-0 too",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://{{node}}:{{am_port_0}}/api/aircraftModels/{{model}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{operator_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 404\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
