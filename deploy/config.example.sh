@@ -29,7 +29,7 @@ GATEWAY=192.168.124.1
 DNS=192.168.122.1
 STORAGE=local-lvm                  # where the VM disks go
 CORES=2
-MEMORY_MB=4096                     # each node runs aircraft-maintenance, airports-routes and a login
+MEMORY_MB=4096                     # each node runs aircraft-maintenance, airports-routes, flight-ops and a login
 DISK_GB=12
 WATCHDOG_SEC=30s                   # a VM that freezes for this long is restarted by Proxmox
 # The Proxmox address as the nodes see it: the vigia asks Proxmox whether a VM is on, and turns
@@ -45,6 +45,7 @@ NODE_GRACE=20s
 VIP_POOL=192.168.124.25-192.168.124.31
 VIP_AIRCRAFT_MAINTENANCE=192.168.124.25
 VIP_AIRPORTS_ROUTES=192.168.124.26
+VIP_FLIGHT_OPS=192.168.124.27
 VIP_LOGIN=192.168.124.28
 
 # --- Images of the services -----------------------------------------------------------------------

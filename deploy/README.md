@@ -23,7 +23,7 @@ deploy/
 | k3s, control plane on the 3 | every node | The cluster keeps being managed with one node down |
 | MetalLB | every node | Virtual IPs that move to another node when theirs is lost |
 | Entry (Envoy) | every node | Sends each request to a ready replica, and tries another when one fails |
-| aircraft-maintenance ×3, airports-routes ×3, login ×3 | one of each per node, each with its own disk | Replication between replicas (see the system documentation) |
+| aircraft-maintenance ×3, airports-routes ×3, flight-ops ×3, login ×3 | one of each per node, each with its own disk | Replication between replicas (see the system documentation) |
 | Vigia | every node, one acting | Turns lost machines back on, isolates those that do not come back, gives replicas back |
 
 On Proxmox, the VMs also get a watchdog: a VM whose system freezes is restarted by Proxmox.
