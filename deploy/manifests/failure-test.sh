@@ -8,6 +8,7 @@
 #
 #   replica-crash   an aircraft-maintenance replica is killed
 #   routes-crash    an airports-routes replica is killed
+#   flight-ops-crash a flight-ops replica is killed
 #   login-crash     a login is killed
 #   deploy          every service restarts, one replica at a time (as deploy/setup.sh does)
 #   node-off        a node loses power
@@ -21,12 +22,13 @@ cd "$DEPLOY_DIR/.."
 
 APP_URL=${APP_URL:-http://$VIP_AIRCRAFT_MAINTENANCE}
 ROUTES_URL=${ROUTES_URL:-http://$VIP_AIRPORTS_ROUTES}
+FLIGHTS_URL=${FLIGHTS_URL:-http://$VIP_FLIGHT_OPS}
 LOGIN_URL=${LOGIN_URL:-http://$VIP_LOGIN}
 TARGET_NODE=${TARGET_NODE:-${NODE_IPS[${#NODE_IPS[@]}-1]}}   # the node hit by node-off and node-freeze
 INTERVAL=${INTERVAL:-0.2}                     # pause between requests, in each worker
 SETTLE=${SETTLE:-15}                          # seconds of traffic once the system is back to normal
 MAX_RECOVERY=${MAX_RECOVERY:-600}             # seconds to wait for the system to be normal again
-ALL_SCENARIOS=(replica-crash routes-crash login-crash deploy node-off node-freeze)
+ALL_SCENARIOS=(replica-crash routes-crash flight-ops-crash login-crash deploy node-off node-freeze)
 
 # Milliseconds since 1970. The date of macOS has no milliseconds: perl, which macOS has, gives them.
 if [[ $(date +%s%3N) =~ ^[0-9]+$ ]]; then
@@ -203,6 +205,43 @@ route_write_worker() {
   done
 }
 
+
+# Schedules a flight with random schedule, reads it back.
+flight_worker() {
+  local ac year month day hour min dep arr id
+  local aircrafts=(CS-TKA CS-TKB CS-TKC)
+  while :; do
+    ac=${aircrafts[$((RANDOM % 3))]}
+    year=$((2100 + RANDOM % 7000))
+    month=$(printf '%02d' $((1 + RANDOM % 12)))
+    day=$(printf '%02d' $((1 + RANDOM % 28)))
+    hour=$(printf '%02d' $((RANDOM % 24)))
+    min=$(printf '%02d' $((RANDOM % 59)))
+    dep="${year}-${month}-${day}T${hour}:${min}:00Z"
+    arr="${year}-${month}-${day}T${hour}:${min}:30Z"
+    call POST "$FLIGHTS_URL/api/flights" -H "$AUTH" "${json[@]}" -d "{\"aircraftId\":\"$ac\",
+      \"originIataCode\":\"LIS\",\"destinationIataCode\":\"OPO\",\"departureDateTime\":\"$dep\",\"arrivalDateTime\":\"$arr\"}"
+    if [ "$STATUS" != 201 ]; then
+      record flight-schedule "$STATUS" fail
+      sleep "$INTERVAL"
+      continue
+    fi
+    record flight-schedule 201 ok
+    id=$(sed -n 's/.*"id":\([0-9]*\).*/\1/p' "$BODY")
+    call GET "$FLIGHTS_URL/api/flights?aircraftId=$ac" -H "$AUTH"
+    case $STATUS in
+      200)
+        if { [ -n "$id" ] && grep -q "\"id\":$id" "$BODY"; } || grep -q "\"departureDateTime\":\"$dep\"" "$BODY"; then
+          record flight-read 200 ok
+        else
+          record flight-read 200 wrong "flight scheduled just before not found"
+        fi ;;
+      *) record flight-read "$STATUS" fail ;;
+    esac
+    sleep "$INTERVAL"
+  done
+}
+
 # Valid credentials must always be accepted, by whichever login answers.
 login_worker() {   # login_worker CHECK USER PASSWORD
   while :; do
@@ -219,7 +258,7 @@ login_worker() {   # login_worker CHECK USER PASSWORD
 WORKERS=()
 start_workers() {
   local name
-  for name in read list write route_read route_list route_write; do
+  for name in read list write route_read route_list route_write flight; do
     BODY=$RUN/.body-$name HEADERS=$RUN/.headers-$name "${name}_worker" &
     WORKERS+=($!)
   done
@@ -250,11 +289,13 @@ cause() {
   case $1 in
     replica-crash) kube -n aisafe delete pod aircraft-maintenance-1 --grace-period=0 --force 2> /dev/null ;;
     routes-crash) kube -n aisafe delete pod airports-routes-1 --grace-period=0 --force 2> /dev/null ;;
+    flight-ops-crash) kube -n aisafe delete pod flight-ops-1 --grace-period=0 --force 2> /dev/null ;;
     login-crash) kube -n aisafe delete "$(kube -n aisafe get pods -l app=login -o name | head -1)" --grace-period=0 --force 2> /dev/null ;;
     deploy)
-      kube -n aisafe rollout restart statefulset/aircraft-maintenance statefulset/airports-routes statefulset/login
+      kube -n aisafe rollout restart statefulset/aircraft-maintenance statefulset/airports-routes statefulset/flight-ops statefulset/login
       kube -n aisafe rollout status statefulset/aircraft-maintenance --timeout=600s
       kube -n aisafe rollout status statefulset/airports-routes --timeout=600s
+      kube -n aisafe rollout status statefulset/flight-ops --timeout=600s
       kube -n aisafe rollout status statefulset/login --timeout=600s ;;
     node-off) node_kernel o ;;
     node-freeze) node_kernel c ;;

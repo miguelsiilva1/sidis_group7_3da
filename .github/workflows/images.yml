@@ -32,7 +32,7 @@ jobs:
           chmod +x mvnw
           prefix="ghcr.io/${GITHUB_REPOSITORY,,}"
           branch="${GITHUB_REF_NAME//\//-}"
-          ./mvnw --batch-mode --no-transfer-progress -pl aircraft-maintenance,airports-routes,login -am -DskipTests \
+          ./mvnw --batch-mode --no-transfer-progress -pl aircraft-maintenance,airports-routes,flight-ops,login -am -DskipTests \
             package jib:build \
             -Djib.image.prefix="$prefix" -Djib.to.tags="$GITHUB_SHA,$branch" \
             -Djib.to.auth.username="$GITHUB_ACTOR" -Djib.to.auth.password="$REGISTRY_PASSWORD"

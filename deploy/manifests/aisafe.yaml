@@ -3,9 +3,9 @@
 # deploy/config.sh. The JWT secret (aisafe-jwt) is created by setup.sh, never stored here.
 #
 # Virtual IPs, through the entry of the node that announces them:
-#   @VIP_AIRCRAFT_MAINTENANCE@ aircraft-maintenance   @VIP_AIRPORTS_ROUTES@ airports-routes   @VIP_LOGIN@ login
+#   @VIP_AIRCRAFT_MAINTENANCE@ aircraft-maintenance   @VIP_AIRPORTS_ROUTES@ airports-routes   @VIP_FLIGHT_OPS@ flight-ops   @VIP_LOGIN@ login
 # One port per replica, on any node:
-#   30810-30812 aircraft-maintenance-0..2   30820-30822 airports-routes-0..2
+#   30810-30812 aircraft-maintenance-0..2   30820-30822 airports-routes-0..2   30830-30832 flight-ops-0..2
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -388,6 +388,206 @@ spec:
       port: 80
       targetPort: 10081
 ---
+# airports-routes for the services' internal use: the entry of the same VM, which picks a
+# ready replica and repeats the request on another one if it fails.
+apiVersion: v1
+kind: Service
+metadata:
+  name: airports-routes-local
+  namespace: aisafe
+spec:
+  internalTrafficPolicy: Local
+  selector:
+    app: entry
+  ports:
+    - name: http
+      port: 80
+      targetPort: 10082
+---
+# ===================== flight-ops =====================
+# Same shape as aircraft-maintenance (see there for the comments).
+# Stable replica names (flight-ops-0.flight-ops...): node ids and peer list.
+apiVersion: v1
+kind: Service
+metadata:
+  name: flight-ops
+  namespace: aisafe
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    app: flight-ops
+  ports:
+    - name: http
+      port: 8083
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: flight-ops-vip
+  namespace: aisafe
+  annotations:
+    metallb.io/loadBalancerIPs: "@VIP_FLIGHT_OPS@"
+spec:
+  type: LoadBalancer
+  # The VM that announces the virtual IP handles its requests with its own entry (below).
+  externalTrafficPolicy: Local
+  selector:
+    app: entry
+  ports:
+    - name: http
+      port: 80
+      targetPort: 10083
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: flight-ops
+  namespace: aisafe
+spec:
+  serviceName: flight-ops
+  replicas: 3
+  podManagementPolicy: Parallel
+  # A deploy restarts the next replica only 10 s after the previous one is ready, so every peer
+  # has seen it back (its startup sync reaches them) before another one stops.
+  minReadySeconds: 10
+  selector:
+    matchLabels:
+      app: flight-ops
+  template:
+    metadata:
+      labels:
+        app: flight-ops
+    spec:
+      # One replica per VM when possible; "preferred" so a replica can be reborn on another VM.
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app: flight-ops
+      # By default k3s waits 5 minutes before moving pods off a VM that stopped answering.
+      tolerations:
+        - key: node.kubernetes.io/unreachable
+          operator: Exists
+          effect: NoExecute
+          tolerationSeconds: 30
+        - key: node.kubernetes.io/not-ready
+          operator: Exists
+          effect: NoExecute
+          tolerationSeconds: 30
+      # preStop below + Spring's graceful shutdown (requests in progress finish).
+      terminationGracePeriodSeconds: 25
+      containers:
+        - name: app
+          image: "@IMAGE_PREFIX@/flight-ops:@IMAGE_TAG@"
+          imagePullPolicy: "@IMAGE_PULL_POLICY@"
+          ports:
+            - containerPort: 8083
+          env:
+            # A replica that restarts gets a new address: look peers up again after 1 s instead of
+            # the JVM's 30 s, or requests keep going to the old address and time out.
+            - name: JAVA_TOOL_OPTIONS
+              value: -Dsun.net.inetaddr.ttl=1 -Dsun.net.inetaddr.negative.ttl=0
+            - name: NODE_ID
+              valueFrom: { fieldRef: { fieldPath: metadata.name } }
+            # Every replica, including this one: each replica leaves itself out (by its node id).
+            - name: PEERS
+              value: >-
+                http://flight-ops-0.flight-ops.aisafe.svc.cluster.local:8083,
+                http://flight-ops-1.flight-ops.aisafe.svc.cluster.local:8083,
+                http://flight-ops-2.flight-ops.aisafe.svc.cluster.local:8083
+            - name: SEED_NODE
+              value: flight-ops-0
+            # Refuse new requests 3 s before stopping: the entries check readiness every second.
+            - name: DRAIN_MS
+              value: "3000"
+            - name: JWT_SECRET
+              valueFrom: { secretKeyRef: { name: aisafe-jwt, key: secret } }
+            # Database on the replica's own disk (volume "data" below). Closed by Spring when it stops,
+            # not by H2 as soon as the replica is told to stop: requests still being answered need it.
+            - name: DB_URL
+              value: jdbc:h2:file:/data/flight-ops;DB_CLOSE_ON_EXIT=FALSE
+            # aircraft-maintenance (contracts C1 and C4), through the entry of this VM (below)
+            - name: AIRCRAFT_MAINTENANCE_URL
+              value: http://aircraft-maintenance-local
+            # airports-routes (contracts C2 and C5), through the entry of this VM (below)
+            - name: AIRPORTS_ROUTES_URL
+              value: http://airports-routes-local
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          resources:
+            requests: { memory: 384Mi, cpu: 100m }
+            limits: { memory: 640Mi }
+          startupProbe:
+            httpGet: { path: /actuator/health/liveness, port: 8083 }
+            periodSeconds: 5
+            failureThreshold: 80
+          readinessProbe:
+            httpGet: { path: /actuator/health/readiness, port: 8083 }
+            periodSeconds: 3
+          livenessProbe:
+            httpGet: { path: /actuator/health/liveness, port: 8083 }
+            periodSeconds: 10
+          # Keep answering for 5 s after being told to stop: the virtual IPs take a moment to stop
+          # sending requests here, and those requests would otherwise fail.
+          lifecycle:
+            preStop:
+              sleep: { seconds: 5 }
+  # The same disks as aircraft-maintenance (see there).
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        storageClassName: local-path
+        resources:
+          requests: { storage: 1Gi }
+---
+# One port per replica, as for aircraft-maintenance.
+apiVersion: v1
+kind: Service
+metadata:
+  name: flight-ops-0
+  namespace: aisafe
+spec:
+  type: NodePort
+  selector:
+    statefulset.kubernetes.io/pod-name: flight-ops-0
+  ports:
+    - port: 8083
+      nodePort: 30830
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: flight-ops-1
+  namespace: aisafe
+spec:
+  type: NodePort
+  selector:
+    statefulset.kubernetes.io/pod-name: flight-ops-1
+  ports:
+    - port: 8083
+      nodePort: 30831
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: flight-ops-2
+  namespace: aisafe
+spec:
+  type: NodePort
+  selector:
+    statefulset.kubernetes.io/pod-name: flight-ops-2
+  ports:
+    - port: 8083
+      nodePort: 30832
+---
 # ===================== login (one per VM) =====================
 # Each login holds a copy of every account, so any login can check any user's credentials.
 # Stable login names (login-0.login...): node ids and peer list, as for aircraft-maintenance.
@@ -561,6 +761,7 @@ spec:
           ports:
             - containerPort: 10081
             - containerPort: 10082
+            - containerPort: 10083
             - containerPort: 10085
           volumeMounts:
             - name: config
