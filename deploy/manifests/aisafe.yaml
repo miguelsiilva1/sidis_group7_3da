@@ -97,7 +97,7 @@ spec:
             # A replica that restarts gets a new address: look peers up again after 1 s instead of
             # the JVM's 30 s, or requests keep going to the old address and time out.
             - name: JAVA_TOOL_OPTIONS
-              value: -Dsun.net.inetaddr.ttl=1 -Dsun.net.inetaddr.negative.ttl=0
+              value: -Dsun.net.inetaddr.ttl=1 -Dsun.net.inetaddr.negative.ttl=0 -XX:TieredStopAtLevel=1 -Xmx320m
             - name: NODE_ID
               valueFrom: { fieldRef: { fieldPath: metadata.name } }
             # Every replica, including this one: each replica leaves itself out (by its node id).
@@ -126,13 +126,18 @@ spec:
           startupProbe:
             httpGet: { path: /actuator/health/liveness, port: 8081 }
             periodSeconds: 5
-            failureThreshold: 36
+            failureThreshold: 200
+            timeoutSeconds: 3
           readinessProbe:
             httpGet: { path: /actuator/health/readiness, port: 8081 }
             periodSeconds: 3
+            timeoutSeconds: 3
+            failureThreshold: 6
           livenessProbe:
             httpGet: { path: /actuator/health/liveness, port: 8081 }
             periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 10
           # Keep answering for 5 s after being told to stop: the virtual IPs take a moment to stop
           # sending requests here, and those requests would otherwise fail.
           lifecycle:
@@ -278,7 +283,7 @@ spec:
             # A replica that restarts gets a new address: look peers up again after 1 s instead of
             # the JVM's 30 s, or requests keep going to the old address and time out.
             - name: JAVA_TOOL_OPTIONS
-              value: -Dsun.net.inetaddr.ttl=1 -Dsun.net.inetaddr.negative.ttl=0
+              value: -Dsun.net.inetaddr.ttl=1 -Dsun.net.inetaddr.negative.ttl=0 -XX:TieredStopAtLevel=1 -Xmx320m
             - name: NODE_ID
               valueFrom: { fieldRef: { fieldPath: metadata.name } }
             # Every replica, including this one: each replica leaves itself out (by its node id).
@@ -310,13 +315,18 @@ spec:
           startupProbe:
             httpGet: { path: /actuator/health/liveness, port: 8082 }
             periodSeconds: 5
-            failureThreshold: 36
+            failureThreshold: 200
+            timeoutSeconds: 3
           readinessProbe:
             httpGet: { path: /actuator/health/readiness, port: 8082 }
             periodSeconds: 3
+            timeoutSeconds: 3
+            failureThreshold: 6
           livenessProbe:
             httpGet: { path: /actuator/health/liveness, port: 8082 }
             periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 10
           # Keep answering for 5 s after being told to stop: the virtual IPs take a moment to stop
           # sending requests here, and those requests would otherwise fail.
           lifecycle:
@@ -491,7 +501,7 @@ spec:
             # A replica that restarts gets a new address: look peers up again after 1 s instead of
             # the JVM's 30 s, or requests keep going to the old address and time out.
             - name: JAVA_TOOL_OPTIONS
-              value: -Dsun.net.inetaddr.ttl=1 -Dsun.net.inetaddr.negative.ttl=0
+              value: -Dsun.net.inetaddr.ttl=1 -Dsun.net.inetaddr.negative.ttl=0 -XX:TieredStopAtLevel=1 -Xmx320m
             - name: NODE_ID
               valueFrom: { fieldRef: { fieldPath: metadata.name } }
             # Every replica, including this one: each replica leaves itself out (by its node id).
@@ -526,13 +536,18 @@ spec:
           startupProbe:
             httpGet: { path: /actuator/health/liveness, port: 8083 }
             periodSeconds: 5
-            failureThreshold: 80
+            failureThreshold: 200
+            timeoutSeconds: 3
           readinessProbe:
             httpGet: { path: /actuator/health/readiness, port: 8083 }
             periodSeconds: 3
+            timeoutSeconds: 3
+            failureThreshold: 6
           livenessProbe:
             httpGet: { path: /actuator/health/liveness, port: 8083 }
             periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 10
           # Keep answering for 5 s after being told to stop: the virtual IPs take a moment to stop
           # sending requests here, and those requests would otherwise fail.
           lifecycle:
@@ -685,7 +700,7 @@ spec:
             - containerPort: 8085
           env:
             - name: JAVA_TOOL_OPTIONS
-              value: -Dsun.net.inetaddr.ttl=1 -Dsun.net.inetaddr.negative.ttl=0
+              value: -Dsun.net.inetaddr.ttl=1 -Dsun.net.inetaddr.negative.ttl=0 -XX:TieredStopAtLevel=1 -Xmx320m
             - name: NODE_ID
               valueFrom: { fieldRef: { fieldPath: metadata.name } }
             - name: PEERS
@@ -711,13 +726,18 @@ spec:
           startupProbe:
             httpGet: { path: /actuator/health/liveness, port: 8085 }
             periodSeconds: 5
-            failureThreshold: 36
+            failureThreshold: 200
+            timeoutSeconds: 3
           readinessProbe:
             httpGet: { path: /actuator/health/readiness, port: 8085 }
             periodSeconds: 3
+            timeoutSeconds: 3
+            failureThreshold: 6
           livenessProbe:
             httpGet: { path: /actuator/health/liveness, port: 8085 }
             periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 10
           # Keep answering for 5 s after being told to stop: the virtual IPs take a moment to stop
           # sending requests here, and those requests would otherwise fail.
           lifecycle:
