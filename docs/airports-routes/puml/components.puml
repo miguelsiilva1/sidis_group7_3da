@@ -1,5 +1,6 @@
 @startuml components
 !include <C4/C4_Component>
+skinparam defaultFontSize 16
 
 title airports-routes - Components (C4 level 3)
 

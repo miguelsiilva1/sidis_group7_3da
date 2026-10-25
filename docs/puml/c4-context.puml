@@ -1,0 +1,23 @@
+@startuml c4-context
+!include <C4/C4_Context>
+skinparam defaultFontSize 16
+
+title AISafe - System context (C4 level 1)
+
+Person(operator, "Backoffice Operator", "Registers aircraft, airports and routes")
+Person(atcc, "ATCC", "Air traffic control: routes, airports, flight scheduling")
+Person(maintenance, "Maintenance Technician / Supervisor", "Maintenance records, templates and parts")
+Person(admin, "Admin", "Accounts and full access")
+
+System(aisafe, "AISafe Flight Management System", "Distributed: aircraft & maintenance, airports & routes, flight operations and login, each replicated three times on a k3s cluster")
+
+System_Ext(infra, "Proxmox host", "Runs the three cluster VMs; turns a stopped VM back on when the vigia asks")
+
+Rel(operator, aisafe, "Uses", "REST + JWT (through a virtual IP)")
+Rel(atcc, aisafe, "Uses", "REST + JWT")
+Rel(maintenance, aisafe, "Uses", "REST + JWT")
+Rel(admin, aisafe, "Uses", "REST + JWT")
+Rel(aisafe, infra, "Asks whether a VM is on, turns it on", "Proxmox API")
+
+SHOW_LEGEND()
+@enduml

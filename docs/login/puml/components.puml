@@ -1,0 +1,33 @@
+@startuml components
+!include <C4/C4_Component>
+skinparam defaultFontSize 16
+
+title login - Components (C4 level 3)
+
+Person(user, "Any user; Admin to register")
+Container_Ext(peers, "Other logins", "Spring Boot", "Same components, own database")
+Container_Ext(services, "aircraft-maintenance, airports-routes, flight-ops", "Spring Boot", "Validate the JWT locally (JwtTokenValidator, common)")
+
+Container_Boundary(svc, "login (one replica)") {
+  Component(authCtl, "AuthController", "REST", "/api/auth/login, /api/auth/register")
+  Component(authUc, "AuthenticateUserUseCase / RegisterUserUseCase", "@UseCase", "Checks the password (BCrypt); registers accounts")
+  Component(jwt, "JwtService", "jjwt", "Signs the token: username, role, expiry")
+  Component(onPeers, "AccountsOnPeers (PeerAccounts)", "PeerClient", "An account not yet copied here: asks every other login")
+  Component(internalCtl, "AccountInternalController", "REST", "/internal/accounts/{username}, role SERVICE")
+  Component(replication, "UserReplicaHandler + Replicator, ReplicaSync", "common", "Copies every account to every login")
+  Component(repos, "JPA repository", "Spring Data", "Accounts (password hashes)")
+}
+ContainerDb(db, "Replica database", "H2 file", "Accounts")
+
+Rel(user, authCtl, "HTTP/REST")
+Rel(authCtl, authUc, "calls")
+Rel(authUc, repos, "find account")
+Rel(authUc, onPeers, "not found here")
+Rel(onPeers, peers, "GET /internal/accounts/{username}", "HTTP/REST")
+Rel(peers, internalCtl, "same, from the other logins")
+Rel(authUc, jwt, "token")
+Rel(repos, replication, "on save")
+Rel(replication, peers, "PUT /internal/replicas/accounts", "HTTP/REST")
+Rel(repos, db, "JDBC")
+Rel(user, services, "Bearer JWT")
+@enduml

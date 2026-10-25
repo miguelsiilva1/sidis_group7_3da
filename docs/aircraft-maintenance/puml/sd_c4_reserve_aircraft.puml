@@ -1,0 +1,36 @@
+@startuml sd_c4_reserve_aircraft
+title Scenario: C4 copy of a flight (the "reserve the aircraft" step of the scheduling Saga)
+
+autonumber
+skinparam defaultFontSize 16
+participant "flight-ops" as fo
+participant "aircraft-maintenance-0\nFlightCopyController" as ctl
+participant "RecordFlightCopy\nUseCase" as uc
+database "DB replica 0" as db
+participant "aircraft-maintenance-1, -2" as peers
+
+fo -> ctl : PUT /internal/flights/{id}\n{aircraft, route, times, status, version}
+ctl -> uc : execute(copy)
+uc -> db : copy with this id?
+alt same or newer version already stored
+  uc --> fo : 200 (idempotent: nothing changes)
+else new copy of a future flight
+  uc -> db : aircraft held here?
+  opt not held here
+    uc -> peers : C1 GET /internal/aircrafts/{reg} (first answer)
+    peers --> uc : aircraft status
+  end
+  alt aircraft does not exist
+    uc --> fo : 404
+  else INACTIVE or UNDER_MAINTENANCE
+    uc --> fo : 409 (flight-ops cancels the flight)
+  else available
+    uc -> db : save copy
+    db -> peers : replicate to the next replica (outbox)
+    uc --> fo : 200
+  end
+else newer version (status change, CANCELED by a compensation)
+  uc -> db : save copy (no aircraft check)
+  uc --> fo : 200
+end
+@enduml

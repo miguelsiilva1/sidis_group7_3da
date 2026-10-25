@@ -1,0 +1,47 @@
+@startuml c4-containers
+!include <C4/C4_Container>
+skinparam defaultFontSize 16
+skinparam wrapWidth 260
+
+title AISafe - Containers (C4 level 2)
+
+Person(user, "Users", "Backoffice Operator, ATCC, Maintenance, Admin")
+
+System_Boundary(aisafe, "AISafe (k3s cluster, 3 VMs)") {
+  Container(entry, "Entry", "Envoy, one per VM", "Behind a virtual IP per service (MetalLB): sends each request to a ready replica, retries on another one")
+  Container(login, "login ×3", "Spring Boot", "Issues the JWT (one per VM); accounts copied to every login")
+  Container(fo, "flight-ops ×3", "Spring Boot", "Scheduled flights (Saga), utilization reports")
+  Container(ar, "airports-routes ×3", "Spring Boot", "Airports, certifications, routes and route history")
+  Container(am, "aircraft-maintenance ×3", "Spring Boot", "Aircraft, aircraft models, maintenance records, templates and parts")
+  ContainerDb(loginDb, "Accounts", "H2, one per replica")
+  ContainerDb(foDb, "Flights", "H2, one per replica")
+  ContainerDb(arDb, "Airports & routes", "H2, one per replica")
+  ContainerDb(amDb, "Aircraft & maintenance", "H2, one per replica")
+}
+
+Rel(user, entry, "Requests", "REST/JSON + JWT")
+Rel(entry, login, "/api/auth")
+Rel(entry, fo, "/api/flights")
+Rel(entry, ar, "/api/airports, /api/routes")
+Rel(entry, am, "/api/aircrafts, /api/maintenance")
+
+Rel_R(fo, ar, "C2, C5", "REST + user's JWT")
+Rel_R(ar, am, "C1, C3", "REST + user's JWT")
+Rel(fo, am, "C1, C4", "REST + user's JWT")
+
+Rel_D(login, loginDb, "")
+Rel_D(fo, foDb, "")
+Rel_D(ar, arDb, "")
+Rel_D(am, amDb, "")
+
+Lay_R(login, fo)
+
+note as replicas
+  Replicas of the same service talk peer to peer
+  (/internal/replicas/**): forwarding of GETs,
+  replication, sync. A call to another service
+  goes to the entry of the same VM.
+end note
+
+SHOW_LEGEND()
+@enduml

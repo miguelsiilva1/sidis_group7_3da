@@ -1,0 +1,36 @@
+@startuml components
+!include <C4/C4_Component>
+skinparam defaultFontSize 16
+
+title aircraft-maintenance - Components (C4 level 3)
+
+Person(user, "Operator / ATCC / Maintenance")
+Container_Ext(callers, "airports-routes, flight-ops", "Spring Boot", "Ask about aircraft; flight-ops sends the copies of its flights")
+Container_Ext(peers, "Other aircraft-maintenance replicas", "Spring Boot", "Same components, own database")
+
+Container_Boundary(svc, "aircraft-maintenance (one replica)") {
+  Component(aircraftCtl, "AircraftController / AircraftModelController", "REST", "/api/aircrafts, /api/aircraftModels")
+  Component(maintCtl, "MaintenanceController", "REST", "/api/maintenance: records, templates, parts, reports")
+  Component(internalCtl, "AircraftInternalController / AircraftModelInternalController / FlightCopyController", "REST", "C1, C3, C4")
+  Component(useCases, "Use cases", "@UseCase", "One class per user action (application layer)")
+  Component(across, "AircraftAcrossReplicas / MaintenanceRecordsAcrossReplicas / FlightCopiesAcrossReplicas", "ReplicaGatherer", "Every record from all replicas, newest version of each")
+  Component(forwarding, "PeerForwardingAdvice + PeerClient", "common", "Forwards a request this replica cannot answer to the peers")
+  Component(replication, "Replicator, OutboxDispatcher, ReplicaSync", "common", "Copies writes to other replicas; periodic sync")
+  Component(repos, "JPA repositories", "Spring Data", "Aircraft, models, maintenance records, templates, parts, flight copies")
+}
+ContainerDb(db, "Replica database", "H2 file", "Own data of this replica")
+
+Rel(user, aircraftCtl, "HTTP/REST, JWT")
+Rel(user, maintCtl, "HTTP/REST, JWT")
+Rel(callers, internalCtl, "C1, C3, C4", "HTTP/REST")
+Rel(aircraftCtl, useCases, "calls")
+Rel(maintCtl, useCases, "calls")
+Rel(internalCtl, useCases, "calls")
+Rel(useCases, repos, "local data")
+Rel(useCases, across, "listings, reports")
+Rel(across, peers, "GET /internal/replicas/{type}", "HTTP/REST")
+Rel(forwarding, peers, "same request + X-Peer-Forwarded", "HTTP/REST")
+Rel(repos, replication, "on save/delete")
+Rel(replication, peers, "PUT /internal/replicas/{type}", "HTTP/REST")
+Rel(repos, db, "JDBC")
+@enduml

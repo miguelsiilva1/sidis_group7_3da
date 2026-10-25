@@ -1,0 +1,68 @@
+@startuml domain-model
+title flight-ops - Domain model
+
+hide empty methods
+skinparam shadowing false
+skinparam defaultFontSize 16
+
+package "flights (records: home replica and the next one)" {
+  class ScheduledFlight <<aggregate root>> {
+    id
+    departureDateTime
+    arrivalDateTime
+    status : FlightStatus
+    version
+    --
+    markScheduled()
+    cancel()
+  }
+  class IataCode <<value object>> {
+    code
+  }
+  class RegistrationNumber <<value object>> {
+    number
+  }
+  enum FlightStatus {
+    PENDING
+    SCHEDULED
+    DELAYED
+    IN_FLIGHT
+    COMPLETED
+    CANCELED
+  }
+}
+
+package "fleet (what other services answer)" {
+  class RouteInfo <<value object>> {
+    status
+    minimumCapacity
+    minimumRange
+    distanceKm
+  }
+  class AircraftInfo <<value object>> {
+    status
+    seatCapacity
+    range
+  }
+  class FlightCopy <<value object>> {
+    id
+    departure, arrival
+    status
+    origin, destination
+    aircraft
+    version
+  }
+}
+
+ScheduledFlight *-- "2" IataCode : origin, destination
+ScheduledFlight *-- "1" RegistrationNumber : aircraft
+ScheduledFlight ..> FlightCopy : sent as (C4, C5)
+
+note bottom of RouteInfo
+  Never stored: asked to airports-routes (C2)
+  and aircraft-maintenance (C1) at each scheduling,
+  so the answer is always the owner's.
+  flight-ops keeps its own IataCode and
+  RegistrationNumber (no shared domain module).
+end note
+@enduml

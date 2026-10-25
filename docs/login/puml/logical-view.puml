@@ -1,0 +1,39 @@
+@startuml logical-view
+title login - Logical view, level 1 (UML components)
+
+skinparam componentStyle uml2
+skinparam shadowing false
+skinparam defaultFontSize 16
+
+actor "Client\n(any role)" as client
+component "Entry (Envoy)" as envoy
+component "aircraft-maintenance\nairports-routes\nflight-ops" as services
+
+interface "POST /api/auth/login\nPOST /api/auth/register (ADMIN)" as publicApi
+interface "GET /internal/accounts/{username}\n(SERVICE)" as accountsApi
+
+package "login (one per VM)" {
+  component "login-0" <<instance>> as r0
+  component "login-1" <<instance>> as r1
+  component "login-2" <<instance>> as r2
+}
+
+client ..> envoy : HTTP/REST (login virtual IP)
+envoy ..> publicApi : to a ready login
+publicApi - r0
+accountsApi - r0
+
+r0 <..> r1 : accounts copied\n(/internal/replicas/accounts)
+r1 <..> r2
+r0 <..> r2
+
+client ..> services : Authorization: Bearer <JWT>
+
+note right of r2
+  Every login holds every account (catalog) and signs the
+  JWT with the secret shared with the services.
+  The services never call login: they check the JWT themselves.
+  An account created moments ago on another login is
+  asked to the peers (/internal/accounts/{username}).
+end note
+@enduml

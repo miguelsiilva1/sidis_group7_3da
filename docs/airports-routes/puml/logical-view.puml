@@ -1,4 +1,5 @@
 @startuml logical-view
+skinparam defaultFontSize 16
 title airports-routes - Logical view, level 1 (UML components)
 
 skinparam componentStyle uml2

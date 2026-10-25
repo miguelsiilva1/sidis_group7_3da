@@ -1,4 +1,5 @@
 @startuml sd_forwarding_get_route
+skinparam defaultFontSize 16
 title Scenario: GET a route held by another replica, with one replica down
 
 autonumber
