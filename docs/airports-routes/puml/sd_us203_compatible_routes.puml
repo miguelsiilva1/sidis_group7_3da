@@ -1,4 +1,5 @@
 @startuml sd_us203_compatible_routes
+skinparam defaultFontSize 16
 title Scenario: US203 compatible routes (another service + every replica)
 
 autonumber

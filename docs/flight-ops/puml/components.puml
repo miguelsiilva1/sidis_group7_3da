@@ -1,0 +1,41 @@
+@startuml components
+!include <C4/C4_Component>
+skinparam defaultFontSize 16
+
+title flight-ops - Components (C4 level 3)
+
+Person(user, "ATCC / Backoffice Operator")
+Container_Ext(ar, "airports-routes", "Spring Boot", "Owns the routes")
+Container_Ext(am, "aircraft-maintenance", "Spring Boot", "Owns the aircraft")
+Container_Ext(peers, "Other flight-ops replicas", "Spring Boot", "Same components, own database")
+
+Container_Boundary(svc, "flight-ops (one replica)") {
+  Component(flightCtl, "FlightController / FlightUtilizationController", "REST", "/api/flights: schedule (US212), by aircraft, import; /api/flights/reports/utilization")
+  Component(schedule, "ScheduleFlightUseCase", "@UseCase", "The Saga: C2, C1, overlap check, C4, C5, compensations")
+  Component(useCases, "Other use cases", "@UseCase", "Flights by aircraft, utilization report, import")
+  Component(fleet, "Fleet (HttpFleet)", "RestClient", "C1, C2, C4, C5; 503 when a service does not answer")
+  Component(compensation, "SagaCompensationService", "@Scheduled", "Compensations that could not be delivered: stored, retried every 5 s")
+  Component(across, "FlightsAcrossReplicas (GatheredFlights)", "ReplicaGatherer", "Every flight from all replicas (overlaps, reports)")
+  Component(forwarding, "PeerForwardingAdvice + PeerClient", "common", "Forwards a request this replica cannot answer to the peers")
+  Component(replication, "Replicator, OutboxDispatcher, ReplicaSync", "common", "Copies writes to the next replica; periodic sync")
+  Component(repos, "JPA repositories", "Spring Data", "Scheduled flights, pending compensations")
+}
+ContainerDb(db, "Replica database", "H2 file", "Own data of this replica")
+
+Rel(user, flightCtl, "HTTP/REST, JWT")
+Rel(flightCtl, schedule, "POST /api/flights")
+Rel(flightCtl, useCases, "calls")
+Rel(schedule, fleet, "C1, C2, C4, C5")
+Rel(schedule, across, "overlapping flights?")
+Rel(schedule, compensation, "compensation not delivered")
+Rel(compensation, fleet, "retry C4 CANCELED")
+Rel(useCases, across, "listings, reports")
+Rel(schedule, repos, "PENDING, SCHEDULED, CANCELED")
+Rel(fleet, ar, "C2, C5", "HTTP/REST")
+Rel(fleet, am, "C1, C4", "HTTP/REST")
+Rel(across, peers, "GET /internal/replicas/flights", "HTTP/REST")
+Rel(forwarding, peers, "same request + X-Peer-Forwarded", "HTTP/REST")
+Rel(repos, replication, "on save/delete")
+Rel(replication, peers, "PUT /internal/replicas/flights", "HTTP/REST")
+Rel(repos, db, "JDBC")
+@enduml

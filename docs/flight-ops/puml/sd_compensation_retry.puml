@@ -1,0 +1,37 @@
+@startuml sd_compensation_retry
+title Scenario: a compensation that cannot be delivered (aircraft-maintenance down)
+
+autonumber
+skinparam defaultFontSize 16
+actor "ATCC" as c
+participant "flight-ops\nScheduleFlightUseCase" as uc
+participant "SagaCompensation\nService" as comp
+database "flights DB" as db
+participant "airports-routes" as ar
+participant "aircraft-maintenance" as am
+
+c -> uc : POST /api/flights
+note over uc : C2, C1, overlaps and C4 succeeded:\nthe aircraft is reserved
+uc -> ar : C5 PUT /internal/flights/{id}
+ar --> uc : 409 route not active
+uc -> am : compensation: C4 PUT copy CANCELED
+am --x uc : no answer (aircraft-maintenance down)
+uc -> comp : recordFailedCompensation(copy CANCELED, AIRCRAFT)
+comp -> db : store pending compensation
+uc -> db : flight CANCELED
+uc --> c : 409
+
+loop every 5 s, while pending
+  comp -> am : C4 PUT copy CANCELED
+  alt delivered (200)
+    comp -> db : remove pending compensation
+  else still down
+    comp -> db : keep it, try again later
+  end
+end
+
+note over uc, am
+  The copy CANCELED has a higher version than the copy SCHEDULED,
+  and C4 is idempotent: delivering it late, or twice, is safe.
+end note
+@enduml

@@ -1,0 +1,44 @@
+@startuml logical-view
+title flight-ops - Logical view, level 1 (UML components)
+
+skinparam componentStyle uml2
+skinparam shadowing false
+skinparam defaultFontSize 16
+
+actor "Client\n(ATCC, Operator)" as client
+component "Entry (Envoy)" as envoy
+
+interface "/api/flights\n/api/flights/reports" as publicApi
+
+package "flight-ops" {
+  component "flight-ops-0" <<instance>> as r0
+  component "flight-ops-1" <<instance>> as r1
+  component "flight-ops-2" <<instance>> as r2
+}
+
+component "airports-routes" as ar
+interface "C2 GET /internal/routes/{o}/{d}\nC5 PUT /internal/flights/{id}" as arApi
+component "aircraft-maintenance" as am
+interface "C1 GET /internal/aircrafts/{reg}\nC4 PUT /internal/flights/{id}" as amApi
+
+client ..> envoy : HTTP/REST + JWT
+envoy ..> publicApi : to a ready replica
+publicApi - r0
+
+r0 <..> r1 : P2P: forwarding,\nreplication, sync\n(/internal/replicas/**)
+r1 <..> r2 : P2P
+r0 <..> r2 : P2P
+
+r0 ..> arApi : HTTP/REST + JWT\n(entry of the same VM)
+r0 ..> amApi : HTTP/REST + JWT\n(entry of the same VM)
+arApi - ar
+amApi - am
+
+note right of r2
+  The three instances offer and require the same
+  interfaces (drawn on flight-ops-0 only).
+  Each instance has its own H2 database.
+  Nobody calls flight-ops: it is the start of the
+  dependencies (here -> airports-routes -> aircraft-maintenance).
+end note
+@enduml

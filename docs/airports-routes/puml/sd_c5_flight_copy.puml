@@ -1,4 +1,5 @@
 @startuml sd_c5_flight_copy
+skinparam defaultFontSize 16
 title Scenario: C5 copy of a flight (the "confirm the route" step of the scheduling Saga)
 
 autonumber

@@ -1,0 +1,53 @@
+@startuml physical-view
+title AISafe - Physical view (deployment on Proxmox + k3s)
+
+skinparam shadowing false
+skinparam defaultFontSize 16
+skinparam nodeFontStyle bold
+
+actor "Client\n(Postman, browser)" as client
+cloud "Virtual IPs (MetalLB)\n.25 aircraft-maintenance · .26 airports-routes\n.27 flight-ops · .28 login" as vips
+
+node "Proxmox host" as px {
+  node "VM k3s1 · 192.168.124.43" as n1 {
+    component "entry (Envoy)" as e1
+    rectangle "aircraft-maintenance-0 :8081\nairports-routes-0 :8082\nflight-ops-0 :8083\nlogin-0 :8085" as p1
+    database "own disk per replica\n(H2 files)" as d1
+  }
+  node "VM k3s2 · .44" as n2 {
+    component "entry (Envoy)" as e2
+    rectangle "aircraft-maintenance-1\nairports-routes-1\nflight-ops-1\nlogin-1" as p2
+    database "own disks (H2)" as d2
+  }
+  node "VM k3s3 · .45" as n3 {
+    component "entry (Envoy)" as e3
+    rectangle "aircraft-maintenance-2\nairports-routes-2\nflight-ops-2\nlogin-2" as p3
+    database "own disks (H2)" as d3
+  }
+}
+
+client --> vips : HTTP :80
+vips --> e1 : announced by one VM
+vips ..> e2
+vips ..> e3
+e1 --> p1 : a ready replica
+e2 --> p2
+e3 --> p3
+e1 -[dashed,norank]-> p2 : or one on another VM
+p1 --> d1
+p2 --> d2
+p3 --> d3
+p1 <-[dashed,norank]-> p2 : peer to peer
+p2 <-[dashed,norank]-> p3 : peer to peer
+e1 -[hidden]right- e2
+e2 -[hidden]right- e3
+
+legend bottom
+  k3s with the control plane on the 3 VMs: any one can be lost.
+  One replica of each service per VM (StatefulSets: stable names, own disk).
+  A virtual IP moves to another VM when its VM is lost.
+  The vigia turns a stopped VM back on (Proxmox API) and moves the replicas
+  of a VM that does not come back; a frozen VM is restarted by the watchdog.
+  Node ports 30810-30812, 30820-30822, 30830-30832: one replica directly (tests).
+endlegend
+@enduml

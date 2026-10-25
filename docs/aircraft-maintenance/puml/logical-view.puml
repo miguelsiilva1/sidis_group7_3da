@@ -1,0 +1,41 @@
+@startuml logical-view
+title aircraft-maintenance - Logical view, level 1 (UML components)
+
+skinparam componentStyle uml2
+skinparam shadowing false
+skinparam defaultFontSize 16
+
+actor "Client\n(Operator, ATCC,\nMaintenance)" as client
+component "Entry (Envoy)" as envoy
+component "airports-routes" as ar
+component "flight-ops" as fo
+
+interface "/api/aircrafts\n/api/aircraftModels\n/api/maintenance" as publicApi
+interface "C1 GET /internal/aircrafts/{reg}\nC3 GET /internal/aircraft-models/{name}\nC4 PUT /internal/flights/{id}" as internalApi
+
+package "aircraft-maintenance" {
+  component "aircraft-maintenance-0" <<instance>> as r0
+  component "aircraft-maintenance-1" <<instance>> as r1
+  component "aircraft-maintenance-2" <<instance>> as r2
+}
+
+client ..> envoy : HTTP/REST + JWT
+envoy ..> publicApi : to a ready replica
+ar ..> internalApi : C1, C3
+fo ..> internalApi : C1, C4
+
+publicApi - r0
+internalApi - r0
+
+r0 <..> r1 : P2P: forwarding,\nreplication, sync\n(/internal/replicas/**)
+r1 <..> r2 : P2P
+r0 <..> r2 : P2P
+
+note right of r2
+  The three instances offer and require the same
+  interfaces (drawn on aircraft-maintenance-0 only).
+  Each instance has its own H2 database.
+  It calls no other service: it is the end of the
+  dependencies (flight-ops -> airports-routes -> here).
+end note
+@enduml

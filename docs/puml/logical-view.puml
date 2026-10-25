@@ -1,0 +1,55 @@
+@startuml logical-view
+title AISafe - Logical view (UML components, level 1)
+
+skinparam componentStyle uml2
+skinparam shadowing false
+skinparam defaultFontSize 16
+
+actor "Client" as client
+
+interface "Auth API" as authApi
+interface "Flights API" as foApi
+interface "Airports & Routes API" as arApi
+interface "Aircraft & Maintenance API" as amApi
+
+component "login" as login
+component "flight-ops" as fo
+component "airports-routes" as ar
+component "aircraft-maintenance" as am
+
+interface "Routes internal\n(C2, C5)" as arInternal
+interface "Aircraft internal\n(C1, C3, C4)" as amInternal
+
+client ..> authApi
+client ..> foApi
+client ..> arApi
+client ..> amApi
+
+authApi -- login
+foApi -- fo
+arApi -- ar
+amApi -- am
+
+fo ..> arInternal
+fo ..> amInternal
+ar ..> amInternal
+arInternal -- ar
+amInternal -- am
+
+note as contracts
+  <b>Provided interfaces</b>
+  Auth API: /api/auth
+  Flights API: /api/flights
+  Airports & Routes API: /api/airports, /api/routes, /api/network
+  Aircraft & Maintenance API: /api/aircrafts, /api/aircraftModels, /api/maintenance
+  Routes internal: C2 GET /internal/routes/{o}/{d}, C5 PUT /internal/flights/{id}
+  Aircraft internal: C1 GET /internal/aircrafts/{reg},
+    C3 GET /internal/aircraft-models/{name}, C4 PUT /internal/flights/{id}
+
+  <b>Every component</b> runs as 3 equal replicas, each with its own database,
+  which also offer and require /internal/replicas/** among themselves
+  (forwarding, replication, sync). Dependencies between services go one way:
+  flight-ops -> airports-routes -> aircraft-maintenance. Nobody calls login:
+  the services check the JWT themselves.
+end note
+@enduml

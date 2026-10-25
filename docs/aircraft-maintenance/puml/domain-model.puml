@@ -1,0 +1,100 @@
+@startuml domain-model
+title aircraft-maintenance - Domain model
+
+hide empty methods
+skinparam shadowing false
+skinparam defaultFontSize 16
+
+package "aircrafts" {
+  class AircraftModel <<aggregate root>> <<catalog>> {
+    modelName
+    manufacturer : Manufacturer
+    fuelCapacity
+    maxRange
+    cruisingSpeed
+    maximumSeatingCapacity
+  }
+  class AircraftModelImage <<value object>> {
+    contentType
+  }
+  class Aircraft <<aggregate root>> <<record>> {
+    manufacturingDate
+    status : AircraftStatus
+    seatCapacity
+    range
+    features
+  }
+  class RegistrationNumber <<value object>> {
+    number
+  }
+  enum AircraftStatus {
+    AVAILABLE
+    INACTIVE
+    UNDER_MAINTENANCE
+    IN_FLIGHT
+  }
+}
+
+package "maintenance" {
+  class MaintenanceRecord <<aggregate root>> <<record>> {
+    recordId
+    description
+    startDate
+    expectedDuration
+    notes
+    status : MaintenanceStatus
+    components : MaintenanceComponent[]
+    cost
+    completedAt
+  }
+  class MaintenanceTemplate <<aggregate root>> <<catalog>> {
+    name
+    templateType : MaintenanceType
+    checklist
+    intervalFlightHours
+    intervalDays
+  }
+  class MaintenancePart <<aggregate root>> <<catalog>> {
+    partNumber
+    name
+    description
+    stockQuantity
+    minimumThreshold
+    component : MaintenanceComponent
+  }
+  class ModelName <<value object>> {
+    name
+  }
+}
+
+package "flightcopies" {
+  class FlightCopy <<record>> {
+    id : the flight's id in flight-ops
+    departureDateTime
+    arrivalDateTime
+    status : FlightCopyStatus
+    originCode
+    destinationCode
+    version
+  }
+}
+
+AircraftModel "1" *-- "0..1" AircraftModelImage
+Aircraft "*" --> "1" AircraftModel : model
+Aircraft *-- "1" RegistrationNumber
+MaintenanceRecord --> "1" RegistrationNumber : aircraft
+MaintenanceRecord --> "0..1" MaintenanceTemplate : template
+MaintenanceRecord --> "*" MaintenancePart : parts
+MaintenanceTemplate --> "*" ModelName : applicable models
+FlightCopy --> "1" RegistrationNumber : aircraft
+
+note bottom of FlightCopy
+  Copy of a flight of flight-ops (C4), kept
+  to know when an aircraft is taken and for
+  the utilization reports. Never edited here.
+end note
+note top of MaintenanceRecord
+  <<catalog>>: on every replica
+  <<record>>: on its home replica and the next one
+end note
+@enduml

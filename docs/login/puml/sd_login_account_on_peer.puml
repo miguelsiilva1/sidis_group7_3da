@@ -1,0 +1,37 @@
+@startuml sd_login_account_on_peer
+title Scenario: logging in with an account created moments ago on another login
+
+autonumber
+skinparam defaultFontSize 16
+actor "Admin" as admin
+actor "New user" as u
+participant "login-0" as l0
+participant "Entry (Envoy)\nlogin virtual IP" as e
+participant "login-1" as l1
+participant "login-2" as l2
+participant "airports-routes\n(any service)" as svc
+
+admin -> l0 : POST /api/auth/register {username, password, role}
+l0 -> l0 : save account (password hash)
+l0 ->> l1 : copy (outbox, right after the commit)
+l0 ->> l2 : copy
+
+u -> e : POST /api/auth/login
+e -> l1 : to a ready login
+alt the copy already arrived
+  l1 -> l1 : account found here
+else not yet
+  par
+    l1 -> l0 : GET /internal/accounts/{username}\n(service token)
+  else
+    l1 -> l2 : GET /internal/accounts/{username}
+  end
+  l0 --> l1 : account (password hash)
+end
+l1 -> l1 : check password, sign JWT
+l1 --> u : 200 {token}
+
+u -> svc : GET /api/routes (Bearer JWT)
+svc -> svc : check signature, expiry and role\n(no call to login)
+svc --> u : 200
+@enduml
