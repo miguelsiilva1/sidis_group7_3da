@@ -44,15 +44,15 @@ class SpringDataScheduledFlightRepositoryTest {
         now = OffsetDateTime.now().truncatedTo(java.time.temporal.ChronoUnit.SECONDS);
 
         // 3 completed flights for OPO -> LIS with CS-TPA
-        flightRepo.save(new ScheduledFlightJpaEntity(now.minusDays(5), now.minusDays(5).plusHours(1), FlightStatus.COMPLETED, "OPO", "LIS", "CS-TPA"));
-        flightRepo.save(new ScheduledFlightJpaEntity(now.minusDays(4), now.minusDays(4).plusHours(1), FlightStatus.COMPLETED, "OPO", "LIS", "CS-TPA"));
-        flightRepo.save(new ScheduledFlightJpaEntity(now.minusDays(1), now.minusDays(1).plusHours(1), FlightStatus.COMPLETED, "OPO", "LIS", "CS-TPA"));
+        flightRepo.save(new ScheduledFlightJpaEntity(101L, now.minusDays(5), now.minusDays(5).plusHours(1), FlightStatus.COMPLETED, "OPO", "LIS", "CS-TPA"));
+        flightRepo.save(new ScheduledFlightJpaEntity(102L, now.minusDays(4), now.minusDays(4).plusHours(1), FlightStatus.COMPLETED, "OPO", "LIS", "CS-TPA"));
+        flightRepo.save(new ScheduledFlightJpaEntity(103L, now.minusDays(1), now.minusDays(1).plusHours(1), FlightStatus.COMPLETED, "OPO", "LIS", "CS-TPA"));
 
         // 1 completed flight for LIS -> MAD with CS-TPA
-        flightRepo.save(new ScheduledFlightJpaEntity(now.minusDays(2), now.minusDays(2).plusHours(1), FlightStatus.COMPLETED, "LIS", "MAD", "CS-TPA"));
+        flightRepo.save(new ScheduledFlightJpaEntity(104L, now.minusDays(2), now.minusDays(2).plusHours(1), FlightStatus.COMPLETED, "LIS", "MAD", "CS-TPA"));
 
         // 1 scheduled (not completed) flight for LIS -> MAD with CS-TPA
-        flightRepo.save(new ScheduledFlightJpaEntity(now.plusDays(1), now.plusDays(1).plusHours(1), FlightStatus.SCHEDULED, "LIS", "MAD", "CS-TPA"));
+        flightRepo.save(new ScheduledFlightJpaEntity(105L, now.plusDays(1), now.plusDays(1).plusHours(1), FlightStatus.SCHEDULED, "LIS", "MAD", "CS-TPA"));
     }
 
     @Test

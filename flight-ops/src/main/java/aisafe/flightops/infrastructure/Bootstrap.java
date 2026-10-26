@@ -2,6 +2,7 @@ package aisafe.flightops.infrastructure;
 
 import aisafe.fleet.application.Fleet;
 import aisafe.fleet.domain.FlightCopy;
+import aisafe.flights.application.SagaCompensationPort;
 import aisafe.flights.domain.FlightStatus;
 import aisafe.flights.domain.IataCode;
 import aisafe.flights.domain.RegistrationNumber;
@@ -30,15 +31,18 @@ public class Bootstrap implements ApplicationRunner {
 
     private final ScheduledFlightRepository scheduledFlightRepository;
     private final Fleet fleet;
+    private final SagaCompensationPort pendingCopies;
     private final String nodeId;
     private final String seedNode;
 
     public Bootstrap(ScheduledFlightRepository scheduledFlightRepository,
                      Fleet fleet,
+                     SagaCompensationPort pendingCopies,
                      @Value("${aisafe.node.id}") String nodeId,
                      @Value("${aisafe.bootstrap.seed-node:}") String seedNode) {
         this.scheduledFlightRepository = scheduledFlightRepository;
         this.fleet = fleet;
+        this.pendingCopies = pendingCopies;
         this.nodeId = nodeId;
         this.seedNode = seedNode;
     }
@@ -82,15 +86,19 @@ public class Bootstrap implements ApplicationRunner {
                     flight.getAircraftRegistrationNumber().getNumber(),
                     flight.getVersion() != null ? flight.getVersion() : 1L
             );
+            // The other services may still be starting: a copy not delivered is retried every 5 s,
+            // with the pending compensations
             try {
                 fleet.sendFlightToAircraft(copy);
             } catch (Exception e) {
                 log.warn("Could not send bootstrap flight copy {} to aircraft-maintenance: {}", copy.id(), e.getMessage());
+                pendingCopies.recordFailedCompensation(copy, "AIRCRAFT", e.getMessage());
             }
             try {
                 fleet.sendFlightToRoutes(copy);
             } catch (Exception e) {
                 log.warn("Could not send bootstrap flight copy {} to airports-routes: {}", copy.id(), e.getMessage());
+                pendingCopies.recordFailedCompensation(copy, "ROUTES", e.getMessage());
             }
         }
     }

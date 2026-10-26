@@ -10,6 +10,7 @@ import aisafe.fleet.domain.RouteConflictException;
 import aisafe.fleet.domain.RouteInfo;
 import aisafe.fleet.domain.RouteNotFoundException;
 import aisafe.shared.infrastructure.peers.PeerHeaders;
+import aisafe.shared.infrastructure.security.ServiceTokens;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,7 +33,8 @@ import java.util.Optional;
 
 /**
  * {@link Fleet} over HTTP: communicates with aircraft-maintenance and airports-routes.
- * Forwards user token and correlation ID, and maps HTTP error status codes to domain exceptions.
+ * Forwards the user's token (or, outside a user's request, this replica's service token) and the
+ * correlation ID, and maps HTTP error status codes to domain exceptions.
  */
 @Component
 public class HttpFleet implements Fleet {
@@ -43,12 +45,14 @@ public class HttpFleet implements Fleet {
 
     private final RestClient aircraftClient;
     private final RestClient routesClient;
+    private final ServiceTokens serviceTokens;
 
     @Autowired
     public HttpFleet(@Value("${aisafe.services.aircraft-maintenance.url:http://localhost:8081}") String aircraftUrl,
                      @Value("${aisafe.services.airports-routes.url:http://localhost:8082}") String routesUrl,
                      @Value("${aisafe.services.connect-timeout-ms:1000}") long connectTimeoutMs,
-                     @Value("${aisafe.services.read-timeout-ms:10000}") long readTimeoutMs) {
+                     @Value("${aisafe.services.read-timeout-ms:10000}") long readTimeoutMs,
+                     ServiceTokens serviceTokens) {
         HttpClient httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofMillis(connectTimeoutMs))
                 .build();
@@ -57,10 +61,11 @@ public class HttpFleet implements Fleet {
 
         this.aircraftClient = RestClient.builder().baseUrl(aircraftUrl).requestFactory(requestFactory).build();
         this.routesClient = RestClient.builder().baseUrl(routesUrl).requestFactory(requestFactory).build();
+        this.serviceTokens = serviceTokens;
     }
 
     public HttpFleet(String baseUrl, long connectTimeoutMs, long readTimeoutMs) {
-        this(baseUrl, baseUrl, connectTimeoutMs, readTimeoutMs);
+        this(baseUrl, baseUrl, connectTimeoutMs, readTimeoutMs, null);
     }
 
     @Override
@@ -68,7 +73,7 @@ public class HttpFleet implements Fleet {
         try {
             return Optional.ofNullable(aircraftClient.get()
                     .uri("/internal/aircrafts/{id}", registration)
-                    .headers(HttpFleet::copyFromCurrentRequest)
+                    .headers(this::copyFromCurrentRequest)
                     .retrieve()
                     .body(AircraftInfo.class));
         } catch (HttpClientErrorException.NotFound e) {
@@ -84,7 +89,7 @@ public class HttpFleet implements Fleet {
         try {
             return Optional.ofNullable(aircraftClient.get()
                     .uri("/internal/aircraft-models/{id}", modelName)
-                    .headers(HttpFleet::copyFromCurrentRequest)
+                    .headers(this::copyFromCurrentRequest)
                     .retrieve()
                     .body(AircraftModelInfo.class)).isPresent();
         } catch (HttpClientErrorException.NotFound e) {
@@ -100,7 +105,7 @@ public class HttpFleet implements Fleet {
         try {
             return Optional.ofNullable(routesClient.get()
                     .uri("/internal/routes/{origin}/{destination}", origin, destination)
-                    .headers(HttpFleet::copyFromCurrentRequest)
+                    .headers(this::copyFromCurrentRequest)
                     .retrieve()
                     .body(RouteInfo.class));
         } catch (HttpClientErrorException.NotFound e) {
@@ -116,7 +121,7 @@ public class HttpFleet implements Fleet {
         try {
             aircraftClient.put()
                     .uri("/internal/flights/{id}", copy.id())
-                    .headers(HttpFleet::copyFromCurrentRequest)
+                    .headers(this::copyFromCurrentRequest)
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(copy)
                     .retrieve()
@@ -136,7 +141,7 @@ public class HttpFleet implements Fleet {
         try {
             routesClient.put()
                     .uri("/internal/flights/{id}", copy.id())
-                    .headers(HttpFleet::copyFromCurrentRequest)
+                    .headers(this::copyFromCurrentRequest)
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(copy)
                     .retrieve()
@@ -151,13 +156,19 @@ public class HttpFleet implements Fleet {
         }
     }
 
-    private static void copyFromCurrentRequest(HttpHeaders headers) {
+    private void copyFromCurrentRequest(HttpHeaders headers) {
+        String authorization = null;
         if (RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes attributes) {
             HttpServletRequest request = attributes.getRequest();
-            String authorization = request.getHeader(HttpHeaders.AUTHORIZATION);
-            if (authorization != null) {
-                headers.set(HttpHeaders.AUTHORIZATION, authorization);
-            }
+            authorization = request.getHeader(HttpHeaders.AUTHORIZATION);
+        }
+        // Outside a user's request (sample data at startup, compensations retried later): this
+        // replica's own token, role SERVICE
+        if (authorization == null && serviceTokens != null) {
+            authorization = "Bearer " + serviceTokens.current();
+        }
+        if (authorization != null) {
+            headers.set(HttpHeaders.AUTHORIZATION, authorization);
         }
         String correlationId = MDC.get(CORRELATION_ID_MDC_KEY);
         if (correlationId != null) {

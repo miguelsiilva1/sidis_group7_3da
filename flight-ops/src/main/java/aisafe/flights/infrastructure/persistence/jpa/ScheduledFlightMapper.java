@@ -14,7 +14,7 @@ public class ScheduledFlightMapper {
         if (entity == null) return null;
 
         return new ScheduledFlight(
-            entity.getId(),
+            entity.getFlightId(),
             entity.getDepartureDateTime(),
             entity.getArrivalDateTime(),
             entity.getStatus(),

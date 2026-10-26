@@ -111,6 +111,25 @@ class ReplicationIntegrationTest {
     }
 
     @Test
+    void ensureFlightsFromPeersAndFlightsCreatedHereNeverTakeEachOthersPlace() {
+        // Each replica numbers its own database rows from 1: the flight's id must not come from them
+        OffsetDateTime dep = OffsetDateTime.of(2026, 6, 1, 8, 0, 0, 0, ZoneOffset.UTC);
+        ScheduledFlight local = flightRepository.save(new ScheduledFlight(
+                dep, dep.plusHours(2), FlightStatus.SCHEDULED, new IataCode("OPO"), new IataCode("LIS"), new RegistrationNumber("CS-TKA")));
+        long fromPeer = local.getId() + 1;   // the next id of flight-ops-1
+        applier.apply(flightHandler, fromPeer(String.valueOf(fromPeer), 1L,
+                flightReplica(fromPeer, "CS-TKB", "FAO", "LIS", FlightStatus.SCHEDULED, 1L), 1_000));
+        ScheduledFlight later = flightRepository.save(new ScheduledFlight(
+                dep.plusDays(1), dep.plusDays(1).plusHours(2), FlightStatus.SCHEDULED, new IataCode("OPO"), new IataCode("LIS"), new RegistrationNumber("CS-TKA")));
+
+        assertEquals(1, local.getId() % 10, "flight-ops-0 gives the ids ending in 1");
+        assertEquals(local.getId() + 10, later.getId());
+        assertEquals("CS-TKA", flightRepository.findById(local.getId()).orElseThrow().getAircraftRegistrationNumber().getNumber());
+        assertEquals("CS-TKB", flightRepository.findById(fromPeer).orElseThrow().getAircraftRegistrationNumber().getNumber());
+        assertEquals(dep.plusDays(1), flightRepository.findById(later.getId()).orElseThrow().getDepartureDateTime());
+    }
+
+    @Test
     void ensureGatheredFlightsIncludeThoseHeldHereWhenPeersDoNotAnswer() {
         OffsetDateTime dep = OffsetDateTime.of(2026, 5, 1, 8, 0, 0, 0, ZoneOffset.UTC);
         OffsetDateTime arr = dep.plusHours(2);

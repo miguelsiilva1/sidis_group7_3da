@@ -17,6 +17,11 @@ public class ScheduledFlightJpaEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    // The flight's id everywhere else (API, replication, copies C4 and C5); id above is only this
+    // database's row number
+    @Column(name = "flight_id", nullable = false, unique = true, updatable = false)
+    private Long flightId;
+
     @Column(name = "departure_date_time", nullable = false)
     private OffsetDateTime departureDateTime;
 
@@ -41,9 +46,10 @@ public class ScheduledFlightJpaEntity {
 
     public ScheduledFlightJpaEntity() {}
 
-    public ScheduledFlightJpaEntity(OffsetDateTime departureDateTime, OffsetDateTime arrivalDateTime,
+    public ScheduledFlightJpaEntity(Long flightId, OffsetDateTime departureDateTime, OffsetDateTime arrivalDateTime,
                                    FlightStatus status, String originIataCode, String destinationIataCode,
                                    String aircraftRegistration) {
+        this.flightId = flightId;
         this.departureDateTime = departureDateTime;
         this.arrivalDateTime = arrivalDateTime;
         this.status = status;

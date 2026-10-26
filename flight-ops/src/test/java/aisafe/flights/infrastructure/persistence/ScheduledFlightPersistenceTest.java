@@ -30,7 +30,7 @@ class ScheduledFlightPersistenceTest {
         OffsetDateTime arrival = departure.plusHours(2);
 
         ScheduledFlightJpaEntity flight = new ScheduledFlightJpaEntity(
-                departure, arrival, FlightStatus.SCHEDULED, "LIS", "OPO", "CS-TPA");
+                1L, departure, arrival, FlightStatus.SCHEDULED, "LIS", "OPO", "CS-TPA");
         flight.setVersion(0L);
         entityManager.persist(flight);
         entityManager.flush();
@@ -47,11 +47,11 @@ class ScheduledFlightPersistenceTest {
         OffsetDateTime arrival = departure.plusHours(2);
 
         ScheduledFlightJpaEntity flight = new ScheduledFlightJpaEntity(
-                departure, arrival, FlightStatus.SCHEDULED, "LIS", "OPO", "CS-TPB");
+                2L, departure, arrival, FlightStatus.SCHEDULED, "LIS", "OPO", "CS-TPB");
         entityManager.persist(flight);
         entityManager.flush();
 
-        repository.alignVersion(flight.getId(), 5L);
+        repository.alignVersion(flight.getFlightId(), 5L);
         entityManager.clear();
 
         var reloaded = repository.findById(flight.getId());
@@ -65,11 +65,11 @@ class ScheduledFlightPersistenceTest {
         OffsetDateTime arrival = departure.plusHours(2);
 
         ScheduledFlightJpaEntity flight1 = new ScheduledFlightJpaEntity(
-                departure, arrival, FlightStatus.SCHEDULED, "LIS", "OPO", "CS-TPC");
+                3L, departure, arrival, FlightStatus.SCHEDULED, "LIS", "OPO", "CS-TPC");
         repository.saveAndFlush(flight1);
 
         ScheduledFlightJpaEntity flight2 = new ScheduledFlightJpaEntity(
-                departure, arrival.plusHours(1), FlightStatus.SCHEDULED, "LIS", "MAD", "CS-TPC");
+                4L, departure, arrival.plusHours(1), FlightStatus.SCHEDULED, "LIS", "MAD", "CS-TPC");
         assertThrows(DataIntegrityViolationException.class, () -> repository.saveAndFlush(flight2));
     }
 }

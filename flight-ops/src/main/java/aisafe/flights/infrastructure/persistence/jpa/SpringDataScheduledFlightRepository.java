@@ -10,9 +10,14 @@ import java.util.Optional;
 
 public interface SpringDataScheduledFlightRepository extends JpaRepository<ScheduledFlightJpaEntity, Long> {
 
+    Optional<ScheduledFlightJpaEntity> findByFlightId(Long flightId);
+
+    @Query("SELECT MAX(f.flightId) FROM ScheduledFlightJpaEntity f WHERE MOD(f.flightId, :step) = :rest")
+    Long findMaxFlightId(@Param("step") long step, @Param("rest") long rest);
+
     Optional<ScheduledFlightJpaEntity> findByAircraftRegistrationAndDepartureDateTime(String aircraftRegistration, OffsetDateTime departureDateTime);
 
-    @Query("SELECT f.version FROM ScheduledFlightJpaEntity f WHERE f.id = :id")
+    @Query("SELECT f.version FROM ScheduledFlightJpaEntity f WHERE f.flightId = :id")
     Long findVersionFor(@Param("id") Long id);
 
     /**
@@ -20,7 +25,7 @@ public interface SpringDataScheduledFlightRepository extends JpaRepository<Sched
      * holders of the flight give the same version.
      */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Query("UPDATE ScheduledFlightJpaEntity f SET f.version = :version WHERE f.id = :id")
+    @Query("UPDATE ScheduledFlightJpaEntity f SET f.version = :version WHERE f.flightId = :id")
     int alignVersion(@Param("id") Long id, @Param("version") Long version);
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
