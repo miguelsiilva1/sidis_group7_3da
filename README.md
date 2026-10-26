@@ -142,10 +142,14 @@ Step by step, requirements and troubleshooting: [`deploy/README.md`](deploy/READ
 
 | Resource             | URL                                                                     |
 |----------------------|-------------------------------------------------------------------------|
-| Login                | `http://<VIP_LOGIN>/api/auth/login`                                     |
-| A service            | `http://<VIP of the service>/api/...`                                   |
+| Login                | `https://<VIP_LOGIN>/api/auth/login`                                    |
+| A service            | `https://<VIP of the service>/api/...`                                  |
 | One replica directly | `http://<any node>:<30810-30812, 30820-30822, 30830-30832>`             |
 | Swagger UI           | `/swagger-ui.html` of any replica                                       |
+
+The virtual IPs answer only with HTTPS. Their certificate is self-signed, made by `deploy/setup.sh`
+and saved in `deploy/entry.crt`: trust it in the client (`curl --cacert deploy/entry.crt`, Postman:
+see [`docs/postman/README.md`](docs/postman/README.md)).
 
 **On one computer** (development; needs Java 25):
 

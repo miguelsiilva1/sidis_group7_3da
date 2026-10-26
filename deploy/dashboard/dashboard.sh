@@ -16,12 +16,13 @@ work=$(mktemp -d)
 trap 'rm -rf "${work:?}"' EXIT
 kube -n aisafe create token dashboard --duration=24h > "$work/token"
 kube -n aisafe get configmap kube-root-ca.crt -o 'jsonpath={.data.ca\.crt}' > "$work/ca.crt"
+save_entry_cert
 
 # Everything the server needs from deploy/config.sh, as JSON
 NODE_NAMES_LIST="${NODE_NAMES[*]}" NODE_IPS_LIST="${NODE_IPS[*]}" VM_IDS_LIST="${VM_IDS[*]:-}" \
 NODE_SSH_JSON="$(printf '%s\n' "${NODE_SSH[@]}" | python3 -c 'import json, sys; print(json.dumps(sys.stdin.read().splitlines()))')" \
 SSH_JSON="$(printf '%s\n' "${SSH[@]}" | python3 -c 'import json, sys; print(json.dumps(sys.stdin.read().splitlines()))')" \
-WORK=$work PORT=$PORT NODE_USER=$NODE_USER MACHINES=$MACHINES PROXMOX=${PROXMOX:-} \
+WORK=$work ENTRY_CERT=$ENTRY_CERT PORT=$PORT NODE_USER=$NODE_USER MACHINES=$MACHINES PROXMOX=${PROXMOX:-} \
 BRIDGE=${BRIDGE:-} CIDR=${CIDR:-} GATEWAY=${GATEWAY:-} \
 VIP_AIRCRAFT_MAINTENANCE=$VIP_AIRCRAFT_MAINTENANCE VIP_AIRPORTS_ROUTES=$VIP_AIRPORTS_ROUTES VIP_FLIGHT_OPS=$VIP_FLIGHT_OPS \
 VIP_LOGIN=$VIP_LOGIN \
@@ -42,6 +43,7 @@ print(json.dumps({
              "flight-ops": e["VIP_FLIGHT_OPS"], "login": e["VIP_LOGIN"]},
     "token_file": e["WORK"] + "/token",
     "ca_file": e["WORK"] + "/ca.crt",
+    "entry_cert": e["ENTRY_CERT"],
 }))
 EOF
 

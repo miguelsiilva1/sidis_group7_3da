@@ -36,4 +36,5 @@ gha-creds-*.json
 ### Deployment: each person's own environment ###
 deploy/config.sh
 deploy/.known_hosts*
+deploy/entry.crt*
 .DS_Store

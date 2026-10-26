@@ -20,7 +20,7 @@
                 "value": "application/json"
               }
             ],
-            "url": "http://{{login_vip}}/api/auth/login",
+            "url": "https://{{login_vip}}/api/auth/login",
             "auth": {
               "type": "noauth"
             },
@@ -58,7 +58,7 @@
                 "value": "application/json"
               }
             ],
-            "url": "http://{{login_vip}}/api/auth/login",
+            "url": "https://{{login_vip}}/api/auth/login",
             "auth": {
               "type": "noauth"
             },
@@ -96,7 +96,7 @@
                 "value": "application/json"
               }
             ],
-            "url": "http://{{login_vip}}/api/auth/login",
+            "url": "https://{{login_vip}}/api/auth/login",
             "auth": {
               "type": "noauth"
             },
@@ -134,7 +134,7 @@
                 "value": "application/json"
               }
             ],
-            "url": "http://{{login_vip}}/api/auth/login",
+            "url": "https://{{login_vip}}/api/auth/login",
             "auth": {
               "type": "noauth"
             },
@@ -750,7 +750,7 @@
           "request": {
             "method": "GET",
             "header": [],
-            "url": "http://{{am_vip}}/api/aircrafts?size=1000",
+            "url": "https://{{am_vip}}/api/aircrafts?size=1000",
             "auth": {
               "type": "bearer",
               "bearer": [
@@ -1518,7 +1518,7 @@
                 "value": "application/json"
               }
             ],
-            "url": "http://{{ar_vip}}/api/airports/LIS/certifications",
+            "url": "https://{{ar_vip}}/api/airports/LIS/certifications",
             "auth": {
               "type": "bearer",
               "bearer": [
@@ -1561,7 +1561,7 @@
                 "value": "application/json"
               }
             ],
-            "url": "http://{{ar_vip}}/api/airports/LIS/certifications",
+            "url": "https://{{ar_vip}}/api/airports/LIS/certifications",
             "auth": {
               "type": "bearer",
               "bearer": [
@@ -1599,7 +1599,7 @@
           "request": {
             "method": "GET",
             "header": [],
-            "url": "http://{{ar_vip}}/api/routes/compatible?aircraft=CS-TKA",
+            "url": "https://{{ar_vip}}/api/routes/compatible?aircraft=CS-TKA",
             "auth": {
               "type": "bearer",
               "bearer": [
@@ -1628,7 +1628,7 @@
           "request": {
             "method": "GET",
             "header": [],
-            "url": "http://{{ar_vip}}/api/routes/compatible?aircraft=ZZ-QQQ",
+            "url": "https://{{ar_vip}}/api/routes/compatible?aircraft=ZZ-QQQ",
             "auth": {
               "type": "bearer",
               "bearer": [
@@ -1657,7 +1657,7 @@
           "request": {
             "method": "GET",
             "header": [],
-            "url": "http://{{ar_vip}}/api/routes/LIS/OPO/fuel-efficiency?aircraft=CS-TKA",
+            "url": "https://{{ar_vip}}/api/routes/LIS/OPO/fuel-efficiency?aircraft=CS-TKA",
             "auth": {
               "type": "bearer",
               "bearer": [
@@ -1692,7 +1692,7 @@
           "request": {
             "method": "GET",
             "header": [],
-            "url": "http://{{ar_vip}}/api/routes?status=active&sortBy=popularity",
+            "url": "https://{{ar_vip}}/api/routes?status=active&sortBy=popularity",
             "auth": {
               "type": "bearer",
               "bearer": [
@@ -2029,7 +2029,7 @@
           "request": {
             "method": "GET",
             "header": [],
-            "url": "http://{{fo_vip}}/api/flights?aircraftId={{flight_aircraft}}",
+            "url": "https://{{fo_vip}}/api/flights?aircraftId={{flight_aircraft}}",
             "auth": {
               "type": "bearer",
               "bearer": [
@@ -2114,7 +2114,7 @@
                 "value": "application/json"
               }
             ],
-            "url": "http://{{fo_vip}}/api/flights",
+            "url": "https://{{fo_vip}}/api/flights",
             "auth": {
               "type": "bearer",
               "bearer": [
@@ -2157,7 +2157,7 @@
                 "value": "application/json"
               }
             ],
-            "url": "http://{{fo_vip}}/api/flights",
+            "url": "https://{{fo_vip}}/api/flights",
             "auth": {
               "type": "bearer",
               "bearer": [
@@ -2195,7 +2195,7 @@
           "request": {
             "method": "DELETE",
             "header": [],
-            "url": "http://{{am_vip}}/api/aircrafts/{{flight_aircraft}}",
+            "url": "https://{{am_vip}}/api/aircrafts/{{flight_aircraft}}",
             "auth": {
               "type": "bearer",
               "bearer": [
@@ -2224,7 +2224,7 @@
           "request": {
             "method": "GET",
             "header": [],
-            "url": "http://{{ar_vip}}/api/routes?status=active&sortBy=popularity",
+            "url": "https://{{ar_vip}}/api/routes?status=active&sortBy=popularity",
             "auth": {
               "type": "bearer",
               "bearer": [
@@ -2267,7 +2267,7 @@
                 "value": "application/json"
               }
             ],
-            "url": "http://{{am_vip}}/api/aircrafts",
+            "url": "https://{{am_vip}}/api/aircrafts",
             "auth": {
               "type": "bearer",
               "bearer": [
@@ -2305,7 +2305,7 @@
           "request": {
             "method": "GET",
             "header": [],
-            "url": "http://{{am_vip}}/api/aircrafts/CS-TKA",
+            "url": "https://{{am_vip}}/api/aircrafts/CS-TKA",
             "auth": {
               "type": "noauth"
             }
@@ -2327,7 +2327,7 @@
           "request": {
             "method": "GET",
             "header": [],
-            "url": "http://{{ar_vip}}/api/routes/compatible?aircraft=CS-TKA",
+            "url": "https://{{ar_vip}}/api/routes/compatible?aircraft=CS-TKA",
             "auth": {
               "type": "bearer",
               "bearer": [
@@ -2361,7 +2361,7 @@
                 "value": "application/json"
               }
             ],
-            "url": "http://{{fo_vip}}/api/flights",
+            "url": "https://{{fo_vip}}/api/flights",
             "auth": {
               "type": "bearer",
               "bearer": [
@@ -2399,7 +2399,7 @@
           "request": {
             "method": "GET",
             "header": [],
-            "url": "http://{{fo_vip}}/api/flights?aircraftId=CS-TKA",
+            "url": "https://{{fo_vip}}/api/flights?aircraftId=CS-TKA",
             "auth": {
               "type": "bearer",
               "bearer": [
@@ -2494,7 +2494,7 @@
           "request": {
             "method": "GET",
             "header": [],
-            "url": "http://{{am_vip}}/api/aircrafts?size=1000",
+            "url": "https://{{am_vip}}/api/aircrafts?size=1000",
             "auth": {
               "type": "bearer",
               "bearer": [
@@ -2531,7 +2531,7 @@
                 "value": "application/json"
               }
             ],
-            "url": "http://{{login_vip}}/api/auth/login",
+            "url": "https://{{login_vip}}/api/auth/login",
             "auth": {
               "type": "noauth"
             },
@@ -2592,7 +2592,7 @@
           "request": {
             "method": "GET",
             "header": [],
-            "url": "http://{{ar_vip}}/api/routes/search?size=1000",
+            "url": "https://{{ar_vip}}/api/routes/search?size=1000",
             "auth": {
               "type": "bearer",
               "bearer": [

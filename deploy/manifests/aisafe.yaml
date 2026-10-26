@@ -1,8 +1,9 @@
 # AISafe on k3s: the services, their virtual IPs (MetalLB), the entry of each node (Envoy) and one
 # port per replica for tests. Applied by deploy/setup.sh, which fills in the @...@ values from
-# deploy/config.sh. The JWT secret (aisafe-jwt) is created by setup.sh, never stored here.
+# deploy/config.sh. The JWT secret (aisafe-jwt) and the entries' certificate (entry-tls) are created
+# by setup.sh, never stored here.
 #
-# Virtual IPs, through the entry of the node that announces them:
+# Virtual IPs (HTTPS, port 443), through the entry of the node that announces them:
 #   @VIP_AIRCRAFT_MAINTENANCE@ aircraft-maintenance   @VIP_AIRPORTS_ROUTES@ airports-routes   @VIP_FLIGHT_OPS@ flight-ops   @VIP_LOGIN@ login
 # One port per replica, on any node:
 #   30810-30812 aircraft-maintenance-0..2   30820-30822 airports-routes-0..2   30830-30832 flight-ops-0..2
@@ -41,9 +42,9 @@ spec:
   selector:
     app: entry
   ports:
-    - name: http
-      port: 80
-      targetPort: 10081
+    - name: https
+      port: 443
+      targetPort: 10441
 ---
 apiVersion: apps/v1
 kind: StatefulSet
@@ -227,9 +228,9 @@ spec:
   selector:
     app: entry
   ports:
-    - name: http
-      port: 80
-      targetPort: 10082
+    - name: https
+      port: 443
+      targetPort: 10442
 ---
 apiVersion: apps/v1
 kind: StatefulSet
@@ -445,9 +446,9 @@ spec:
   selector:
     app: entry
   ports:
-    - name: http
-      port: 80
-      targetPort: 10083
+    - name: https
+      port: 443
+      targetPort: 10443
 ---
 apiVersion: apps/v1
 kind: StatefulSet
@@ -633,9 +634,9 @@ spec:
   selector:
     app: entry
   ports:
-    - name: http
-      port: 80
-      targetPort: 10085
+    - name: https
+      port: 443
+      targetPort: 10445
 ---
 # The login of the same VM, for the services' internal use (plan, §6.2).
 apiVersion: v1
@@ -770,7 +771,7 @@ spec:
       labels:
         app: entry
       annotations:
-        # Restarts the entries when envoy.yaml changes
+        # Restarts the entries when envoy.yaml or their certificate changes
         aisafe/config: "@ENTRY_CONFIG_HASH@"
     spec:
       terminationGracePeriodSeconds: 15
@@ -782,11 +783,16 @@ spec:
           ports:
             - containerPort: 10081
             - containerPort: 10082
-            - containerPort: 10083
-            - containerPort: 10085
+            - containerPort: 10441
+            - containerPort: 10442
+            - containerPort: 10443
+            - containerPort: 10445
           volumeMounts:
             - name: config
               mountPath: /etc/envoy
+            - name: tls
+              mountPath: /etc/entry-tls
+              readOnly: true
           resources:
             requests: { memory: 48Mi, cpu: 50m }
             limits: { memory: 128Mi }
@@ -801,3 +807,6 @@ spec:
         - name: config
           configMap:
             name: entry
+        - name: tls
+          secret:
+            secretName: entry-tls

@@ -104,7 +104,7 @@ prepare_node() {   # prepare_node IP
     cloud-init status --wait > /dev/null 2>&1 || true   # first boot of a VM: still installing
     export DEBIAN_FRONTEND=noninteractive
     apt-get -o DPkg::Lock::Timeout=300 update -q > /dev/null
-    apt-get -o DPkg::Lock::Timeout=300 install -y -q ipvsadm ipset curl $agent > /dev/null
+    apt-get -o DPkg::Lock::Timeout=300 install -y -q ipvsadm ipset curl openssl $agent > /dev/null
     [ -z '$agent' ] || systemctl start qemu-guest-agent
     printf '%s\n' ip_vs ip_vs_rr ip_vs_wrr ip_vs_sh nf_conntrack br_netfilter overlay > /etc/modules-load.d/k3s.conf
     for m in ip_vs ip_vs_rr ip_vs_wrr ip_vs_sh nf_conntrack br_netfilter overlay; do modprobe \$m; done
@@ -241,16 +241,30 @@ prepare_images() {
 }
 
 stage_app() {
-  local jwt
+  local jwt vips
   : "${VIP_AIRPORTS_ROUTES:?missing in deploy/config.sh: add it from deploy/config.example.sh}"
   : "${VIP_FLIGHT_OPS:?missing in deploy/config.sh: add it from deploy/config.example.sh}"
   prepare_images
-  log "Namespace, JWT secret and the entries' configuration"
+  log "Namespace, JWT secret and the entries' configuration and certificate"
   kube create namespace aisafe --dry-run=client -o yaml | kube apply -f - > /dev/null
   if ! kube -n aisafe get secret aisafe-jwt > /dev/null 2>&1; then
     jwt=$(head -c 32 /dev/urandom | base64)
     secret_yaml aisafe aisafe-jwt "secret=$jwt" | kube apply -f - > /dev/null
   fi
+  # HTTPS on the virtual IPs: a self-signed certificate for the four of them, made on a node (its
+  # key never leaves the cluster) the first time and again when the virtual IPs change.
+  vips="$VIP_AIRCRAFT_MAINTENANCE $VIP_AIRPORTS_ROUTES $VIP_FLIGHT_OPS $VIP_LOGIN"
+  if [ "$(kube -n aisafe get secret entry-tls -o 'jsonpath={.metadata.annotations.aisafe/vips}' 2> /dev/null)" != "$vips" ]; then
+    on_node "${NODE_IPS[0]}" "
+      dir=\$(mktemp -d)
+      openssl req -x509 -newkey rsa:2048 -nodes -days 825 -subj '/CN=AISafe entry' \\
+        -addext 'subjectAltName=IP:${vips// /,IP:}' -keyout \$dir/tls.key -out \$dir/tls.crt 2> /dev/null
+      k3s kubectl -n aisafe create secret tls entry-tls --cert=\$dir/tls.crt --key=\$dir/tls.key \\
+        --dry-run=client -o yaml | k3s kubectl apply -f - > /dev/null
+      k3s kubectl -n aisafe annotate --overwrite secret entry-tls aisafe/vips='$vips' > /dev/null
+      rm -rf \$dir"
+  fi
+  save_entry_cert
   kube -n aisafe create configmap entry --from-file=envoy.yaml=/dev/stdin --dry-run=client -o yaml \
     < "$DEPLOY_DIR/manifests/envoy.yaml" | kube apply -f - > /dev/null
 
@@ -260,7 +274,7 @@ stage_app() {
       -e "s|@VIP_FLIGHT_OPS@|$VIP_FLIGHT_OPS|g" \
       -e "s|@IMAGE_PREFIX@|$IMAGE_PREFIX|g" -e "s|@IMAGE_TAG@|$IMAGE_TAG|g" \
       -e "s|@IMAGE_PULL_POLICY@|$IMAGE_PULL_POLICY|g" \
-      -e "s|@ENTRY_CONFIG_HASH@|$(hash16 < "$DEPLOY_DIR/manifests/envoy.yaml")|g" \
+      -e "s|@ENTRY_CONFIG_HASH@|$(cat "$DEPLOY_DIR/manifests/envoy.yaml" "$ENTRY_CERT" | hash16)|g" \
       "$DEPLOY_DIR/manifests/aisafe.yaml" | kube apply -f - > /dev/null
   # Local images keep their name from one build to the next: restart to run the new ones. Images
   # from GitHub have a new name per commit, so applying already restarted what changed.
@@ -308,13 +322,17 @@ stage_check() {
   log "Waiting until everything is normal"
   wait_normal 900
   log "Trying the services through the virtual IPs (from ${NODE_NAMES[0]})"
+  save_entry_cert
   # Right after the pods are ready, the entries may still be finding them: try for a minute.
   on_node "${NODE_IPS[0]}" "
+    ca=\$(mktemp)
+    printf '%s\\n' '$(cat "$ENTRY_CERT")' > \$ca
+    curl() { command curl --cacert \"\$ca\" \"\$@\"; }
     for _ in \$(seq 30); do
-      token=\$(curl -sf --max-time 10 -H 'Content-Type: application/json' -d '{\"username\":\"atcc\",\"password\":\"atcc123\"}' http://$VIP_LOGIN/api/auth/login | sed -n 's/.*\"token\":\"\\([^\"]*\\)\".*/\\1/p') || true
-      if [ -n \"\$token\" ] && curl -sf --max-time 10 -o /dev/null -H \"Authorization: Bearer \$token\" http://$VIP_AIRCRAFT_MAINTENANCE/api/aircrafts \
-          && curl -sf --max-time 10 -o /dev/null -H \"Authorization: Bearer \$token\" http://$VIP_AIRPORTS_ROUTES/api/routes/search \
-          && curl -sf --max-time 10 -o /dev/null -H \"Authorization: Bearer \$token\" 'http://$VIP_FLIGHT_OPS/api/flights?aircraftId=CS-TKA'; then
+      token=\$(curl -sf --max-time 10 -H 'Content-Type: application/json' -d '{\"username\":\"atcc\",\"password\":\"atcc123\"}' https://$VIP_LOGIN/api/auth/login | sed -n 's/.*\"token\":\"\\([^\"]*\\)\".*/\\1/p') || true
+      if [ -n \"\$token\" ] && curl -sf --max-time 10 -o /dev/null -H \"Authorization: Bearer \$token\" https://$VIP_AIRCRAFT_MAINTENANCE/api/aircrafts \
+          && curl -sf --max-time 10 -o /dev/null -H \"Authorization: Bearer \$token\" https://$VIP_AIRPORTS_ROUTES/api/routes/search \
+          && curl -sf --max-time 10 -o /dev/null -H \"Authorization: Bearer \$token\" 'https://$VIP_FLIGHT_OPS/api/flights?aircraftId=CS-TKA'; then
         exit 0
       fi
       sleep 2
@@ -326,10 +344,11 @@ stage_check() {
   cat <<EOF
 
 AISafe is up:
-  aircraft-maintenance  http://$VIP_AIRCRAFT_MAINTENANCE   (Swagger: /swagger-ui.html)
-  airports-routes       http://$VIP_AIRPORTS_ROUTES   (Swagger: /swagger-ui.html)
-  flight-ops            http://$VIP_FLIGHT_OPS   (Swagger: /swagger-ui.html)
-  login                 http://$VIP_LOGIN
+  aircraft-maintenance  https://$VIP_AIRCRAFT_MAINTENANCE   (Swagger: /swagger-ui.html)
+  airports-routes       https://$VIP_AIRPORTS_ROUTES   (Swagger: /swagger-ui.html)
+  flight-ops            https://$VIP_FLIGHT_OPS   (Swagger: /swagger-ui.html)
+  login                 https://$VIP_LOGIN
+Their certificate is self-signed: clients trust it with deploy/entry.crt (curl --cacert deploy/entry.crt).
 To check that no request fails while machines and replicas fail, from a computer that reaches
 these addresses: deploy/manifests/failure-test.sh
 EOF

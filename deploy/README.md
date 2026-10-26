@@ -70,6 +70,12 @@ deploy/setup.sh
 It takes about 15 minutes the first time. At the end it waits until everything is normal, tries a
 login and a request through the virtual IPs, and prints the addresses.
 
+The virtual IPs answer only with **HTTPS** (port 443). The certificate is made by `setup.sh app` on a
+node, for the four virtual IPs, and kept in the Secret `entry-tls` (made again when the virtual IPs
+change). It is self-signed, so clients must trust it: `setup.sh` saves it in `deploy/entry.crt`
+(`curl --cacert deploy/entry.crt https://<virtual IP>/...`). Inside the cluster the requests still go
+in plain HTTP (see the limitations in the system documentation).
+
 | Stage | Command | What it does |
 |---|---|---|
 | machines | `deploy/setup.sh machines` | Creates or updates the VMs on Proxmox (nothing with `MACHINES=existing`) |

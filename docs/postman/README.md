@@ -23,15 +23,19 @@ prints these headers in the console.
 
 ## Running it
 
+The virtual IPs answer only with HTTPS, with a self-signed certificate (`deploy/entry.crt`, saved by
+`deploy/setup.sh`); the node ports of single replicas are plain HTTP.
+
 **Postman:** import both files, select the environment "AISafe k3s", and run the collection (or
 the folders in order). With a cluster other than the reference one, set `node` (any node's IP) and
-the virtual IPs in the environment to the values of `deploy/config.sh`.
+the virtual IPs in the environment to the values of `deploy/config.sh`. To trust the certificate:
+Settings → Certificates → CA certificates, select `deploy/entry.crt`.
 
 **Command line** ([newman](https://www.npmjs.com/package/newman)):
 
 ```sh
 newman run docs/postman/aisafe-distributed.postman_collection.json \
-  -e docs/postman/aisafe-k3s.postman_environment.json
+  -e docs/postman/aisafe-k3s.postman_environment.json --ssl-extra-ca-certs deploy/entry.crt
 ```
 
 **Folder 8 with a replica really down:** run folders 0, 2 and 6, stop a replica, then run folder 8
@@ -40,9 +44,9 @@ newman, pass them on with `--export-environment`:
 
 ```sh
 newman run docs/postman/aisafe-distributed.postman_collection.json -e docs/postman/aisafe-k3s.postman_environment.json \
-  --folder "0. Setup: logins and every replica ready" --folder "2. Forwarding between replicas (peer-to-peer)" \
+  --ssl-extra-ca-certs deploy/entry.crt --folder "0. Setup: logins and every replica ready" --folder "2. Forwarding between replicas (peer-to-peer)" \
   --folder "6. Flights: the scheduling Saga (flight-ops)" --export-environment /tmp/aisafe-env.json
 kubectl -n aisafe delete pod aircraft-maintenance-1 airports-routes-1 flight-ops-1 --grace-period=0 --force
 newman run docs/postman/aisafe-distributed.postman_collection.json -e /tmp/aisafe-env.json \
-  --folder "8. Failures: with a replica down"
+  --ssl-extra-ca-certs deploy/entry.crt --folder "8. Failures: with a replica down"
 ```

@@ -26,6 +26,8 @@ from datetime import datetime, timedelta, timezone
 
 CFG = json.load(open(sys.argv[1]))
 PAGE = sys.argv[2]
+# The virtual IPs answer with HTTPS, with the entries' self-signed certificate (deploy/entry.crt).
+ENTRY_TLS = ssl.create_default_context(cafile=CFG["entry_cert"])
 SERVICES = ("aircraft-maintenance", "airports-routes", "flight-ops", "login", "entry", "vigia")
 CLIENT = "client"
 
@@ -421,7 +423,7 @@ def call(method, url, body=None, token=None, corr=None, timeout=15):
     req = urllib.request.Request(url, method=method, headers=headers,
                                  data=json.dumps(body).encode() if body is not None else None)
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with urllib.request.urlopen(req, context=ENTRY_TLS, timeout=timeout) as resp:
             return resp.status, resp.read().decode(errors="replace")
     except urllib.error.HTTPError as e:
         # 503 with Retry-After: the service is not sure yet, and asks the client to try again
@@ -433,7 +435,7 @@ def call(method, url, body=None, token=None, corr=None, timeout=15):
 
 def token(user="atcc"):
     if user not in session["tokens"]:
-        code, body = call("POST", f"http://{CFG['vips']['login']}/api/auth/login",
+        code, body = call("POST", f"https://{CFG['vips']['login']}/api/auth/login",
                           {"username": user, "password": user + "123"})
         if code == 200:
             session["tokens"][user] = json.loads(body)["token"]
@@ -443,7 +445,7 @@ def token(user="atcc"):
 def base_url(svc, target):
     """vip: through the virtual IP and an entry; 0/1/2: straight to that replica (its node port)."""
     if target in (None, "", "vip"):
-        return f"http://{CFG['vips'][svc]}"
+        return f"https://{CFG['vips'][svc]}"
     port = {"aircraft-maintenance": 30810, "airports-routes": 30820, "flight-ops": 30830}[svc] + int(target)
     return f"http://{CFG['nodes'][0]['ip']}:{port}"
 
@@ -461,7 +463,7 @@ def do_request(op, target=None, prefix="demo"):
     t0 = now_ms()
     am = base_url("aircraft-maintenance", target)
     if op == "login":
-        code, body = call("POST", f"http://{CFG['vips']['login']}/api/auth/login",
+        code, body = call("POST", f"https://{CFG['vips']['login']}/api/auth/login",
                        {"username": "atcc", "password": "atcc123"}, corr=corr)
     elif op == "create":
         reg = f"DM-{letters(3)}"
@@ -481,7 +483,7 @@ def do_request(op, target=None, prefix="demo"):
     elif op == "route":
         code, body = call("GET", f"{base_url('airports-routes', target)}/api/routes/LIS/OPO", token=token(), corr=corr)
     elif op == "compatible":
-        code, body = call("GET", f"http://{CFG['vips']['airports-routes']}/api/routes/compatible?aircraft=CS-TKA",
+        code, body = call("GET", f"https://{CFG['vips']['airports-routes']}/api/routes/compatible?aircraft=CS-TKA",
                        token=token(), corr=corr)
     elif op == "schedule":
         # The Saga: flight-ops asks airports-routes (route) and aircraft-maintenance (aircraft), then
