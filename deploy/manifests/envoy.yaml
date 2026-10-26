@@ -13,14 +13,31 @@ static_resources:
                 "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
                 stat_prefix: aircraft-maintenance
                 use_remote_address: true
+                # One JSON line per request, for the demo dashboard (deploy/dashboard/): which replica
+                # answered, after how many attempts, and the request's correlation id.
+                access_log:
+                  - name: envoy.access_loggers.stdout
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
+                      log_format: { json_format: { k: "request", svc: "aircraft-maintenance", t: "%START_TIME(%Y-%m-%dT%H:%M:%S.%3fZ)%", corr: "%REQ(X-CORRELATION-ID)%", rid: "%REQ(X-REQUEST-ID)%", m: "%REQ(:METHOD)%", p: "%REQ(X-ENVOY-ORIGINAL-PATH?:PATH)%", code: "%RESPONSE_CODE%", flags: "%RESPONSE_FLAGS%", up: "%UPSTREAM_HOST%", n: "%UPSTREAM_REQUEST_ATTEMPT_COUNT%", ms: "%DURATION%", from: "%DOWNSTREAM_REMOTE_ADDRESS_WITHOUT_PORT%" } }
                 http_filters:
                   - name: envoy.filters.http.router
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+                      # And one per attempt: a replica that failed before another one answered.
+                      upstream_log:
+                        - name: envoy.access_loggers.stdout
+                          typed_config:
+                            "@type": type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
+                            log_format: { json_format: { k: "attempt", svc: "aircraft-maintenance", t: "%START_TIME(%Y-%m-%dT%H:%M:%S.%3fZ)%", corr: "%REQ(X-CORRELATION-ID)%", rid: "%REQ(X-REQUEST-ID)%", m: "%REQ(:METHOD)%", p: "%REQ(X-ENVOY-ORIGINAL-PATH?:PATH)%", code: "%RESPONSE_CODE%", flags: "%RESPONSE_FLAGS%", up: "%UPSTREAM_HOST%", n: "%UPSTREAM_REQUEST_ATTEMPT_COUNT%", ms: "%DURATION%", from: "%DOWNSTREAM_REMOTE_ADDRESS_WITHOUT_PORT%" } }
                 route_config:
                   virtual_hosts:
                     - name: aircraft-maintenance
                       domains: ["*"]
+                      # The replicas log the request under the same id (X-Correlation-Id) as this entry.
+                      request_headers_to_add:
+                        - header: { key: X-Correlation-Id, value: "%REQ(X-REQUEST-ID)%" }
+                          append_action: ADD_IF_ABSENT
                       routes:
                           - match: { prefix: "/", headers: [{ name: ":method", string_match: { exact: GET } }] }
                             route:
@@ -58,14 +75,31 @@ static_resources:
                 "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
                 stat_prefix: airports-routes
                 use_remote_address: true
+                # One JSON line per request, for the demo dashboard (deploy/dashboard/): which replica
+                # answered, after how many attempts, and the request's correlation id.
+                access_log:
+                  - name: envoy.access_loggers.stdout
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
+                      log_format: { json_format: { k: "request", svc: "airports-routes", t: "%START_TIME(%Y-%m-%dT%H:%M:%S.%3fZ)%", corr: "%REQ(X-CORRELATION-ID)%", rid: "%REQ(X-REQUEST-ID)%", m: "%REQ(:METHOD)%", p: "%REQ(X-ENVOY-ORIGINAL-PATH?:PATH)%", code: "%RESPONSE_CODE%", flags: "%RESPONSE_FLAGS%", up: "%UPSTREAM_HOST%", n: "%UPSTREAM_REQUEST_ATTEMPT_COUNT%", ms: "%DURATION%", from: "%DOWNSTREAM_REMOTE_ADDRESS_WITHOUT_PORT%" } }
                 http_filters:
                   - name: envoy.filters.http.router
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+                      # And one per attempt: a replica that failed before another one answered.
+                      upstream_log:
+                        - name: envoy.access_loggers.stdout
+                          typed_config:
+                            "@type": type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
+                            log_format: { json_format: { k: "attempt", svc: "airports-routes", t: "%START_TIME(%Y-%m-%dT%H:%M:%S.%3fZ)%", corr: "%REQ(X-CORRELATION-ID)%", rid: "%REQ(X-REQUEST-ID)%", m: "%REQ(:METHOD)%", p: "%REQ(X-ENVOY-ORIGINAL-PATH?:PATH)%", code: "%RESPONSE_CODE%", flags: "%RESPONSE_FLAGS%", up: "%UPSTREAM_HOST%", n: "%UPSTREAM_REQUEST_ATTEMPT_COUNT%", ms: "%DURATION%", from: "%DOWNSTREAM_REMOTE_ADDRESS_WITHOUT_PORT%" } }
                 route_config:
                   virtual_hosts:
                     - name: airports-routes
                       domains: ["*"]
+                      # The replicas log the request under the same id (X-Correlation-Id) as this entry.
+                      request_headers_to_add:
+                        - header: { key: X-Correlation-Id, value: "%REQ(X-REQUEST-ID)%" }
+                          append_action: ADD_IF_ABSENT
                       routes:
                           - match: { prefix: "/", headers: [{ name: ":method", string_match: { exact: GET } }] }
                             route:
@@ -103,14 +137,31 @@ static_resources:
                 "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
                 stat_prefix: flight-ops
                 use_remote_address: true
+                # One JSON line per request, for the demo dashboard (deploy/dashboard/): which replica
+                # answered, after how many attempts, and the request's correlation id.
+                access_log:
+                  - name: envoy.access_loggers.stdout
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
+                      log_format: { json_format: { k: "request", svc: "flight-ops", t: "%START_TIME(%Y-%m-%dT%H:%M:%S.%3fZ)%", corr: "%REQ(X-CORRELATION-ID)%", rid: "%REQ(X-REQUEST-ID)%", m: "%REQ(:METHOD)%", p: "%REQ(X-ENVOY-ORIGINAL-PATH?:PATH)%", code: "%RESPONSE_CODE%", flags: "%RESPONSE_FLAGS%", up: "%UPSTREAM_HOST%", n: "%UPSTREAM_REQUEST_ATTEMPT_COUNT%", ms: "%DURATION%", from: "%DOWNSTREAM_REMOTE_ADDRESS_WITHOUT_PORT%" } }
                 http_filters:
                   - name: envoy.filters.http.router
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+                      # And one per attempt: a replica that failed before another one answered.
+                      upstream_log:
+                        - name: envoy.access_loggers.stdout
+                          typed_config:
+                            "@type": type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
+                            log_format: { json_format: { k: "attempt", svc: "flight-ops", t: "%START_TIME(%Y-%m-%dT%H:%M:%S.%3fZ)%", corr: "%REQ(X-CORRELATION-ID)%", rid: "%REQ(X-REQUEST-ID)%", m: "%REQ(:METHOD)%", p: "%REQ(X-ENVOY-ORIGINAL-PATH?:PATH)%", code: "%RESPONSE_CODE%", flags: "%RESPONSE_FLAGS%", up: "%UPSTREAM_HOST%", n: "%UPSTREAM_REQUEST_ATTEMPT_COUNT%", ms: "%DURATION%", from: "%DOWNSTREAM_REMOTE_ADDRESS_WITHOUT_PORT%" } }
                 route_config:
                   virtual_hosts:
                     - name: flight-ops
                       domains: ["*"]
+                      # The replicas log the request under the same id (X-Correlation-Id) as this entry.
+                      request_headers_to_add:
+                        - header: { key: X-Correlation-Id, value: "%REQ(X-REQUEST-ID)%" }
+                          append_action: ADD_IF_ABSENT
                       routes:
                           - match: { prefix: "/", headers: [{ name: ":method", string_match: { exact: GET } }] }
                             route:
@@ -148,14 +199,31 @@ static_resources:
                 "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
                 stat_prefix: login
                 use_remote_address: true
+                # One JSON line per request, for the demo dashboard (deploy/dashboard/): which replica
+                # answered, after how many attempts, and the request's correlation id.
+                access_log:
+                  - name: envoy.access_loggers.stdout
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
+                      log_format: { json_format: { k: "request", svc: "login", t: "%START_TIME(%Y-%m-%dT%H:%M:%S.%3fZ)%", corr: "%REQ(X-CORRELATION-ID)%", rid: "%REQ(X-REQUEST-ID)%", m: "%REQ(:METHOD)%", p: "%REQ(X-ENVOY-ORIGINAL-PATH?:PATH)%", code: "%RESPONSE_CODE%", flags: "%RESPONSE_FLAGS%", up: "%UPSTREAM_HOST%", n: "%UPSTREAM_REQUEST_ATTEMPT_COUNT%", ms: "%DURATION%", from: "%DOWNSTREAM_REMOTE_ADDRESS_WITHOUT_PORT%" } }
                 http_filters:
                   - name: envoy.filters.http.router
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+                      # And one per attempt: a replica that failed before another one answered.
+                      upstream_log:
+                        - name: envoy.access_loggers.stdout
+                          typed_config:
+                            "@type": type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
+                            log_format: { json_format: { k: "attempt", svc: "login", t: "%START_TIME(%Y-%m-%dT%H:%M:%S.%3fZ)%", corr: "%REQ(X-CORRELATION-ID)%", rid: "%REQ(X-REQUEST-ID)%", m: "%REQ(:METHOD)%", p: "%REQ(X-ENVOY-ORIGINAL-PATH?:PATH)%", code: "%RESPONSE_CODE%", flags: "%RESPONSE_FLAGS%", up: "%UPSTREAM_HOST%", n: "%UPSTREAM_REQUEST_ATTEMPT_COUNT%", ms: "%DURATION%", from: "%DOWNSTREAM_REMOTE_ADDRESS_WITHOUT_PORT%" } }
                 route_config:
                   virtual_hosts:
                     - name: login
                       domains: ["*"]
+                      # The replicas log the request under the same id (X-Correlation-Id) as this entry.
+                      request_headers_to_add:
+                        - header: { key: X-Correlation-Id, value: "%REQ(X-REQUEST-ID)%" }
+                          append_action: ADD_IF_ABSENT
                       routes:
                           - match: { prefix: "/", headers: [{ name: ":method", string_match: { exact: GET } }] }
                             route:

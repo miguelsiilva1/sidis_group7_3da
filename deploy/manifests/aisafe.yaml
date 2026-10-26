@@ -777,7 +777,8 @@ spec:
       containers:
         - name: envoy
           image: envoyproxy/envoy:v1.35.0
-          args: [-c, /etc/envoy/envoy.yaml, --log-level, warn]
+          # Request logs written within 250 ms (default: 10 s), for the demo dashboard
+          args: [-c, /etc/envoy/envoy.yaml, --log-level, warn, --file-flush-interval-msec, "250"]
           ports:
             - containerPort: 10081
             - containerPort: 10082

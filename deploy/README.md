@@ -12,7 +12,8 @@ deploy/
 ├── lib.sh                # shared by the scripts: configuration, SSH to the nodes
 ├── proxmox/              # only for VMs on Proxmox (the demo)
 ├── manifests/            # the services (aisafe.yaml), the entries (envoy.yaml), failure-test.sh
-└── vigia/                # the watcher of the machines (runs in the cluster)
+├── vigia/                # the watcher of the machines (runs in the cluster)
+└── dashboard/            # live map of the cluster and its requests, for demonstrations
 ```
 
 ## What it builds
@@ -119,6 +120,39 @@ deploy/manifests/failure-test.sh node-off               # only one
 It sends requests without pause to the virtual IPs while it causes one failure at a time (a replica
 or a login killed, a deploy, a node powered off, a node frozen), and counts the requests that failed
 or got a wrong answer. Run it from a computer that reaches the virtual IPs (Linux, macOS or WSL).
+
+## Watching it live (demo dashboard)
+
+```sh
+deploy/dashboard/dashboard.sh                           # then open http://localhost:8099
+```
+
+A map in the browser, for demonstrations (not for production), of the whole path of a request:
+this computer on top, the network the machines share (behind the router: on Proxmox, the Proxmox
+host), and the three machines at the corners of a triangle. There are only two kinds of lines: the
+network line down to each machine, carrying the virtual IPs that machine answers for (MetalLB), and
+one link between each pair of machines. Every request travels along them, in its service's colour:
+
+- from the client through the network to the machine that answers for the virtual IP, and into its
+  entry (Envoy);
+- from the entry to a replica: on the same machine, or out along the link to another machine (again
+  to another replica when one fails);
+- between two replicas: asking for a record, or sending a copy (labelled with the answer);
+- between services, through the entry of the machine.
+
+The page shows what changes as it happens: a replica starting, stopping or failing; a machine off,
+starting, frozen or isolated, and for how long; a virtual IP moving to another machine; a replica
+away from its machine (and, in its machine, where it is); a replica that stopped asking a peer
+(✕ and the peer's number on the replica); the vigia that acts, and the vigia turning a machine on through the Proxmox API. From the page you can send requests (through a virtual IP,
+or straight to one replica), start steady traffic, kill a replica (click it), power off or freeze a
+machine, and restart a service one replica at a time. The counters show what the requests sent from
+the page got: "try again" is the 503 with `Retry-After` that a replica gives while it cannot be sure
+a record does not exist.
+
+It runs on this computer, outside the cluster, so that it keeps showing everything while machines
+fail; it needs `python3`, and to reach the nodes (port 6443) and the virtual IPs. It follows the
+logs: the entries write one line per request and one per attempt, and the replicas log each call to
+a peer, all under the request's correlation id (`X-Correlation-Id`, given by the entry).
 
 ## When something fails
 
