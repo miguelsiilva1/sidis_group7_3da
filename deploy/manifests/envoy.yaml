@@ -1,13 +1,16 @@
 # Configuration of the entry (Envoy), one per VM: each virtual IP leads to the entry of the VM
 # that announces it, which sends each request to a ready replica and, when that replica does not
 # answer, to another one. Loaded into the ConfigMap "entry" by deploy/setup.sh.
-#   10081 -> aircraft-maintenance replicas   10082 -> airports-routes replicas   10083 -> flight-ops replicas   10085 -> logins
+# HTTPS, behind the virtual IPs (certificate in the Secret "entry-tls", made by deploy/setup.sh):
+#   10441 -> aircraft-maintenance replicas   10442 -> airports-routes replicas   10443 -> flight-ops replicas   10445 -> logins
+# Plain HTTP, only for the services' calls from inside the cluster (aircraft-maintenance-local, airports-routes-local):
+#   10081 -> aircraft-maintenance replicas   10082 -> airports-routes replicas
 static_resources:
   listeners:
     - name: aircraft-maintenance
       address: { socket_address: { address: 0.0.0.0, port_value: 10081 } }
       filter_chains:
-        - filters:
+        - filters: &aircraft_maintenance
             - name: envoy.filters.network.http_connection_manager
               typed_config:
                 "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
@@ -66,10 +69,24 @@ static_resources:
                                     typed_config:
                                       "@type": type.googleapis.com/envoy.extensions.retry.host.previous_hosts.v3.PreviousHostsPredicate
                                 host_selection_retry_max_attempts: 3
+    # The same with HTTPS, behind the virtual IP; the one above is for calls from inside the cluster.
+    - name: aircraft-maintenance-https
+      address: { socket_address: { address: 0.0.0.0, port_value: 10441 } }
+      filter_chains:
+        - filters: *aircraft_maintenance
+          transport_socket: &tls
+            name: envoy.transport_sockets.tls
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
+              common_tls_context:
+                tls_params: { tls_minimum_protocol_version: TLSv1_2 }
+                tls_certificates:
+                  - certificate_chain: { filename: /etc/entry-tls/tls.crt }
+                    private_key: { filename: /etc/entry-tls/tls.key }
     - name: airports-routes
       address: { socket_address: { address: 0.0.0.0, port_value: 10082 } }
       filter_chains:
-        - filters:
+        - filters: &airports_routes
             - name: envoy.filters.network.http_connection_manager
               typed_config:
                 "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
@@ -128,10 +145,18 @@ static_resources:
                                     typed_config:
                                       "@type": type.googleapis.com/envoy.extensions.retry.host.previous_hosts.v3.PreviousHostsPredicate
                                 host_selection_retry_max_attempts: 3
-    - name: flight-ops
-      address: { socket_address: { address: 0.0.0.0, port_value: 10083 } }
+    # The same with HTTPS, behind the virtual IP; the one above is for calls from inside the cluster.
+    - name: airports-routes-https
+      address: { socket_address: { address: 0.0.0.0, port_value: 10442 } }
       filter_chains:
-        - filters:
+        - filters: *airports_routes
+          transport_socket: *tls
+    # HTTPS only: nothing inside the cluster calls flight-ops through the entry.
+    - name: flight-ops
+      address: { socket_address: { address: 0.0.0.0, port_value: 10443 } }
+      filter_chains:
+        - transport_socket: *tls
+          filters:
             - name: envoy.filters.network.http_connection_manager
               typed_config:
                 "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
@@ -190,10 +215,12 @@ static_resources:
                                     typed_config:
                                       "@type": type.googleapis.com/envoy.extensions.retry.host.previous_hosts.v3.PreviousHostsPredicate
                                 host_selection_retry_max_attempts: 3
+    # HTTPS only: nothing inside the cluster calls login through the entry.
     - name: login
-      address: { socket_address: { address: 0.0.0.0, port_value: 10085 } }
+      address: { socket_address: { address: 0.0.0.0, port_value: 10445 } }
       filter_chains:
-        - filters:
+        - transport_socket: *tls
+          filters:
             - name: envoy.filters.network.http_connection_manager
               typed_config:
                 "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager

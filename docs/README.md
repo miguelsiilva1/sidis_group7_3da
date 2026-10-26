@@ -32,7 +32,7 @@ the vigia asks it to turn a stopped VM back on.
 | airports-routes | airports, certifications, routes, route history | 8082 | 192.168.124.26 | 3 |
 | flight-ops | scheduled flights, utilization reports | 8083 | 192.168.124.27 | 3 |
 | login | accounts; issues the JWT | 8085 | 192.168.124.28 | 3 (one per VM) |
-| entry (Envoy) | nothing: sends each request to a ready replica | 10081-10085 | behind every virtual IP | one per VM |
+| entry (Envoy) | nothing: ends HTTPS and sends each request to a ready replica | 10441-10445 (HTTPS), 10081-10082 (inside the cluster) | behind every virtual IP (port 443) | one per VM |
 
 Split by business capability, as the assignment suggests. Dependencies go one way only,
 **flight-ops → airports-routes → aircraft-maintenance**, so there are no cycles and
@@ -58,7 +58,7 @@ all of them in the `common` module: forwarding between replicas (`PeerForwarding
 | 3 VMs on Proxmox | k3s with the control plane on all three: the cluster is still managed with one VM down |
 | Replicas | StatefulSets: stable names (`airports-routes-0..2`), one replica of each service per VM, each with its own disk (H2 file) |
 | Virtual IPs | MetalLB: one per service, announced by one VM and moved to another when that VM is lost |
-| Entry | Envoy on every VM: sends a request to a ready replica (health checks every second), and repeats it on another replica when one fails |
+| Entry | Envoy on every VM: ends HTTPS (the virtual IPs answer only on port 443), sends a request to a ready replica (health checks every second), and repeats it on another replica when one fails |
 | Calls between services | to the entry of the same VM (`aircraft-maintenance-local`, `airports-routes-local`), which picks a ready replica |
 | Vigia | turns a stopped VM back on (Proxmox API); isolates a VM that does not come back, so its replicas are reborn on the others; a frozen VM is restarted by the Proxmox watchdog |
 | Tests | node ports 30810-30812, 30820-30822, 30830-30832: one replica directly |
@@ -173,7 +173,7 @@ Section 7 (diagram above).
 | Access control (RBAC) | per service, the same rules as the monolith (`SecurityConfig` of each service); 401 without a token, 403 with the wrong role | Done |
 | Authentication between services | contracts C1-C5 carry the user's token (the callee applies its own rules); replication between replicas (`/internal/replicas/**`) needs a service token (role `SERVICE`) | Done, with the same secret as user tokens |
 | Traceability | every log line has the replica and the correlation id (`X-Correlation-Id`), passed on to peers and other services | Done |
-| Encryption in transit | — | **Not done**: plain HTTP from the client to the entry and inside the cluster (see limitations) |
+| Encryption in transit | client to entry: HTTPS only (TLS 1.2 or later) on the virtual IPs, ended by Envoy; certificate for the four virtual IPs, made by `deploy/setup.sh` and kept in a k3s Secret (its key never leaves the cluster); plain HTTP on the virtual IPs is refused | Done for the client. **Not done** inside the cluster (see limitations) |
 | Audit logging | — | **Not done** as a separate audit trail (only the request logs above) |
 
 ## 12. Main decisions
@@ -191,9 +191,13 @@ Section 7 (diagram above).
 
 ## 13. Known limitations
 
-- **No encryption in transit and no audit trail yet** (section 11): to add, TLS at the entry and mutual
-  TLS between replicas and services, RS256 tokens with a public key (JWKS) so services cannot issue
-  tokens, and an audit log of every write (who, what, when, result).
+- **Encryption only from the client to the entry, and no audit trail yet** (section 11): inside the
+  cluster (entry to replica, replica to replica, service to service) requests go in plain HTTP; to
+  add, mutual TLS there, RS256 tokens with a public key (JWKS) so services cannot issue tokens, and
+  an audit log of every write (who, what, when, result).
+- **The entries' certificate is self-signed**: every client has to trust `deploy/entry.crt`; in
+  production it would come from a certificate authority the clients already trust.
+- **The node ports for tests** (one replica directly) are plain HTTP and bypass the entry.
 - **Last writer wins** depends on the clocks of the VMs being synchronised (NTP); of two concurrent
   changes to the same record, one is lost without warning.
 - **Uniqueness during a partition** is best effort (section 8).

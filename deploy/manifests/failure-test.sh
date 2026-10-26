@@ -20,10 +20,10 @@ set -euo pipefail
 source "$(dirname "$0")/../lib.sh"
 cd "$DEPLOY_DIR/.."
 
-APP_URL=${APP_URL:-http://$VIP_AIRCRAFT_MAINTENANCE}
-ROUTES_URL=${ROUTES_URL:-http://$VIP_AIRPORTS_ROUTES}
-FLIGHTS_URL=${FLIGHTS_URL:-http://$VIP_FLIGHT_OPS}
-LOGIN_URL=${LOGIN_URL:-http://$VIP_LOGIN}
+APP_URL=${APP_URL:-https://$VIP_AIRCRAFT_MAINTENANCE}
+ROUTES_URL=${ROUTES_URL:-https://$VIP_AIRPORTS_ROUTES}
+FLIGHTS_URL=${FLIGHTS_URL:-https://$VIP_FLIGHT_OPS}
+LOGIN_URL=${LOGIN_URL:-https://$VIP_LOGIN}
 TARGET_NODE=${TARGET_NODE:-${NODE_IPS[${#NODE_IPS[@]}-1]}}   # the node hit by node-off and node-freeze
 INTERVAL=${INTERVAL:-0.2}                     # pause between requests, in each worker
 SETTLE=${SETTLE:-15}                          # seconds of traffic once the system is back to normal
@@ -63,7 +63,7 @@ CLIENT_TIMEOUT=${CLIENT_TIMEOUT:-15}
 call() {   # call METHOD URL [CURL-ARGS...]: sets STATUS and TOOK; the answer goes to $BODY and $HEADERS
   local method=$1 url=$2 out
   shift 2
-  out=$(curl -s -o "$BODY" -D "$HEADERS" -w '%{http_code} %{time_total}' --max-time "$CLIENT_TIMEOUT" \
+  out=$(curl -s --cacert "$ENTRY_CERT" -o "$BODY" -D "$HEADERS" -w '%{http_code} %{time_total}' --max-time "$CLIENT_TIMEOUT" \
     -X "$method" "$@" "$url") || true
   STATUS=${out% *} TOOK=${out#* }
 }
@@ -176,7 +176,7 @@ route_list_worker() {
 # of the previous scenario were stopped at any point, maybe between creating and deleting: the
 # route they left behind is deleted first, without counting.
 route_write_worker() {
-  curl -s -o /dev/null --max-time "$CLIENT_TIMEOUT" -X DELETE -H "$AUTH" "$ROUTES_URL/api/routes/LHR/MAD" || true
+  curl -s --cacert "$ENTRY_CERT" -o /dev/null --max-time "$CLIENT_TIMEOUT" -X DELETE -H "$AUTH" "$ROUTES_URL/api/routes/LHR/MAD" || true
   while :; do
     call POST "$ROUTES_URL/api/routes" -H "$AUTH" "${json[@]}" -d '{"originIataCode":"LHR","destinationIataCode":"MAD",
       "estimatedFlightTime":150,"minimumRange":1300.0,"minimumCapacity":120,"createdBy":"failure-test"}'
@@ -184,7 +184,7 @@ route_write_worker() {
       record route-create "$STATUS" fail
       # A create that got no answer may still have been stored: delete it, without counting, or
       # every later create of the same route is refused as a duplicate.
-      curl -s -o /dev/null --max-time "$CLIENT_TIMEOUT" -X DELETE -H "$AUTH" "$ROUTES_URL/api/routes/LHR/MAD" || true
+      curl -s --cacert "$ENTRY_CERT" -o /dev/null --max-time "$CLIENT_TIMEOUT" -X DELETE -H "$AUTH" "$ROUTES_URL/api/routes/LHR/MAD" || true
       sleep "$INTERVAL"
       continue
     fi
@@ -340,10 +340,11 @@ mkdir -p "$RUN"
 
 log "Waiting until the system is normal"
 wait_normal "$MAX_RECOVERY"
+save_entry_cert   # the virtual IPs answer with HTTPS, with a self-signed certificate
 
 token_of() {   # token_of USER PASSWORD
   local token
-  token=$(curl -sf --max-time 5 "${json[@]}" -d "{\"username\":\"$1\",\"password\":\"$2\"}" "$LOGIN_URL/api/auth/login" \
+  token=$(curl -sf --cacert "$ENTRY_CERT" --max-time 5 "${json[@]}" -d "{\"username\":\"$1\",\"password\":\"$2\"}" "$LOGIN_URL/api/auth/login" \
     | sed -n 's/.*"token":"\([^"]*\)".*/\1/p') || true
   [ -n "$token" ] || { echo "Could not log in as $1 at $LOGIN_URL." >&2; return 1; }
   echo "$token"
@@ -352,7 +353,7 @@ AUTH="Authorization: Bearer $(token_of atcc atcc123)"
 # A user created now (only an administrator creates accounts): logging in with it checks that
 # every login knows the accounts created later.
 NEW_USER=failure-test-$(date +%s) NEW_PASSWORD=failure-test
-curl -sf --max-time 5 -o /dev/null "${json[@]}" -H "Authorization: Bearer $(token_of admin admin123)" \
+curl -sf --cacert "$ENTRY_CERT" --max-time 5 -o /dev/null "${json[@]}" -H "Authorization: Bearer $(token_of admin admin123)" \
   -d "{\"username\":\"$NEW_USER\",\"password\":\"$NEW_PASSWORD\",\"role\":\"ATCC\"}" \
   "$LOGIN_URL/api/auth/register" || { echo "Could not register $NEW_USER at $LOGIN_URL." >&2; exit 1; }
 

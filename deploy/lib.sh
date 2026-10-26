@@ -51,6 +51,14 @@ kube() {
   return 1
 }
 
+# The entries' certificate (HTTPS on the virtual IPs, made by setup.sh), saved here for the clients
+# on this computer to trust it: it is self-signed.
+ENTRY_CERT=$DEPLOY_DIR/entry.crt
+save_entry_cert() {
+  kube -n aisafe get secret entry-tls -o 'jsonpath={.data.tls\.crt}' | base64 -d > "$ENTRY_CERT.new"
+  mv "$ENTRY_CERT.new" "$ENTRY_CERT"
+}
+
 # Every node ready and without the vigia's marks, every pod of AISafe running and ready, and one
 # replica of each service (and one login) per node.
 system_normal() {
