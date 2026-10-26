@@ -8,6 +8,7 @@ import aisafe.fleet.domain.FlightCopy;
 import aisafe.fleet.domain.RouteConflictException;
 import aisafe.fleet.domain.RouteInfo;
 import aisafe.fleet.domain.RouteNotFoundException;
+import aisafe.shared.infrastructure.security.ServiceTokens;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -32,6 +33,8 @@ import static org.junit.jupiter.api.Assertions.*;
  * Uses a real HTTP server on localhost as external services.
  */
 class HttpFleetTest {
+
+    private static final String SECRET = "404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970";
 
     private HttpServer server;
     private final ConcurrentLinkedQueue<String> paths = new ConcurrentLinkedQueue<>();
@@ -128,6 +131,20 @@ class HttpFleetTest {
         assertDoesNotThrow(() -> fleet.sendFlightToAircraft(copy));
         assertEquals("/internal/flights/1", paths.peek());
         assertEquals("PUT", methods.peek());
+    }
+
+    @Test
+    void ensureCopyOutsideAUsersRequestCarriesTheServiceToken() throws IOException {
+        fleetAnswering(200, "{}");
+        String url = "http://127.0.0.1:" + server.getAddress().getPort();
+        // Sample data at startup and retried compensations run without a user's request
+        HttpFleet fleet = new HttpFleet(url, url, 500, 2000, new ServiceTokens(SECRET, "flight-ops-0"));
+        FlightCopy copy = new FlightCopy("1", OffsetDateTime.now(ZoneOffset.UTC), OffsetDateTime.now(ZoneOffset.UTC).plusHours(2),
+                "SCHEDULED", "LIS", "OPO", "CS-TKA", 1L);
+
+        fleet.sendFlightToAircraft(copy);
+
+        assertTrue(authorizationHeaders.peek().startsWith("Bearer "), authorizationHeaders.peek());
     }
 
     @Test

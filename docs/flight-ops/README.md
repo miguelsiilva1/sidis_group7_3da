@@ -52,6 +52,13 @@ C1), so the answer is always the owner's. The service keeps its own `IataCode` a
 
 Ring: `flight-ops-0 → 1 → 2 → 0`.
 
+A flight's `id` is the same on every replica that holds it, and in its copies (C4, C5). Each replica
+gives the ids that end in its own digit (`flight-ops-0`: 1, 11, 21…; `flight-ops-1`: 2, 12, 22…),
+after the highest one it holds, so no two replicas give the same id without having to agree on
+it. A replica reborn empty recovers its flights before it is ready, and goes on after them. The
+database's own row number (domain identity apart from database identity, as in PSOFT) never
+leaves the replica.
+
 ## 5. Contracts it uses
 
 | # | Owner | Request | Used for |

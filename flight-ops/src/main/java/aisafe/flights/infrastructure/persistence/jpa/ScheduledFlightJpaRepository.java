@@ -6,8 +6,8 @@ import aisafe.flights.domain.ScheduledFlightRepository;
 import aisafe.flights.infrastructure.replication.FlightReplica;
 import aisafe.flights.infrastructure.replication.FlightReplicaHandler;
 import aisafe.shared.infrastructure.replication.Replicator;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 import java.time.OffsetDateTime;
@@ -21,14 +21,41 @@ public class ScheduledFlightJpaRepository implements ScheduledFlightRepository {
 
     private final SpringDataScheduledFlightRepository springRepo;
     private final Replicator replicator;
-    private final JdbcTemplate jdbcTemplate;
+
+    // A flight's id must be the same on every replica that holds it and never given twice, without
+    // the replicas agreeing on it: each replica gives the ids that end in its own digit
+    // (flight-ops-0: 1, 11, 21...; flight-ops-1: 2, 12, 22...), after the highest one it holds. A
+    // replica reborn empty recovers its flights from its peers before it is ready, so it goes on
+    // after them. Up to 10 replicas.
+    private static final long ID_STEP = 10;
+    private final long idRest;
+    private Long lastId;
 
     public ScheduledFlightJpaRepository(SpringDataScheduledFlightRepository springRepo,
                                         Replicator replicator,
-                                        JdbcTemplate jdbcTemplate) {
+                                        @Value("${aisafe.node.id}") String nodeId) {
         this.springRepo = springRepo;
         this.replicator = replicator;
-        this.jdbcTemplate = jdbcTemplate;
+        this.idRest = (replicaIndex(nodeId) + 1) % ID_STEP;
+    }
+
+    /** flight-ops-2 -> 2; a name without a number (local development) -> 0. */
+    private static int replicaIndex(String nodeId) {
+        String digits = nodeId.substring(nodeId.lastIndexOf('-') + 1);
+        int index = digits.matches("\\d+") ? Integer.parseInt(digits) : 0;
+        if (index >= ID_STEP) {
+            throw new IllegalStateException("Flight ids support up to " + ID_STEP + " replicas, not " + nodeId);
+        }
+        return index;
+    }
+
+    private synchronized long nextFlightId() {
+        if (lastId == null) {
+            Long highest = springRepo.findMaxFlightId(ID_STEP, idRest);
+            lastId = highest != null ? highest : (idRest == 0 ? 0 : idRest - ID_STEP);
+        }
+        lastId += ID_STEP;
+        return lastId;
     }
 
     @Override
@@ -40,7 +67,7 @@ public class ScheduledFlightJpaRepository implements ScheduledFlightRepository {
     public ScheduledFlight save(ScheduledFlight flight) {
         Optional<ScheduledFlightJpaEntity> existing = Optional.empty();
         if (flight.getId() != null) {
-            existing = springRepo.findById(flight.getId());
+            existing = springRepo.findByFlightId(flight.getId());
         }
         if (existing.isEmpty()) {
             existing = springRepo.findByAircraftRegistrationAndDepartureDateTime(
@@ -61,28 +88,12 @@ public class ScheduledFlightJpaRepository implements ScheduledFlightRepository {
             }
             ScheduledFlightJpaEntity saved = springRepo.saveAndFlush(entity);
             ScheduledFlight result = ScheduledFlightMapper.toDomain(saved);
-            replicator.recordSaved(FlightReplicaHandler.TYPE, String.valueOf(saved.getId()), FlightReplica.from(result), saved.getVersion());
-            return result;
-        } else if (flight.getId() != null) {
-            // Replicated or imported flight with an explicit ID: insert directly with specified ID
-            jdbcTemplate.update(
-                    "INSERT INTO scheduled_flight (id, departure_date_time, arrival_date_time, status, origin_iata_code, destination_iata_code, aircraft_registration, version) " +
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                    flight.getId(),
-                    flight.getDepartureDateTime(),
-                    flight.getArrivalDateTime(),
-                    flight.getStatus().name(),
-                    flight.getOriginCode().getCode(),
-                    flight.getDestinationCode().getCode(),
-                    flight.getAircraftRegistrationNumber().getNumber(),
-                    flight.getVersion() != null ? flight.getVersion() : 0L
-            );
-            ScheduledFlightJpaEntity saved = springRepo.findById(flight.getId()).orElseThrow();
-            ScheduledFlight result = ScheduledFlightMapper.toDomain(saved);
-            replicator.recordSaved(FlightReplicaHandler.TYPE, String.valueOf(saved.getId()), FlightReplica.from(result), saved.getVersion());
+            replicator.recordSaved(FlightReplicaHandler.TYPE, String.valueOf(saved.getFlightId()), FlightReplica.from(result), saved.getVersion());
             return result;
         } else {
+            // A new flight gets its id here; a flight from a peer keeps the one it has
             ScheduledFlightJpaEntity entity = new ScheduledFlightJpaEntity(
+                    flight.getId() != null ? flight.getId() : nextFlightId(),
                     flight.getDepartureDateTime(),
                     flight.getArrivalDateTime(),
                     flight.getStatus(),
@@ -92,7 +103,7 @@ public class ScheduledFlightJpaRepository implements ScheduledFlightRepository {
             );
             ScheduledFlightJpaEntity saved = springRepo.saveAndFlush(entity);
             ScheduledFlight result = ScheduledFlightMapper.toDomain(saved);
-            replicator.recordSaved(FlightReplicaHandler.TYPE, String.valueOf(saved.getId()), FlightReplica.from(result), saved.getVersion());
+            replicator.recordSaved(FlightReplicaHandler.TYPE, String.valueOf(saved.getFlightId()), FlightReplica.from(result), saved.getVersion());
             return result;
         }
     }
@@ -100,16 +111,16 @@ public class ScheduledFlightJpaRepository implements ScheduledFlightRepository {
     @Override
     public void delete(ScheduledFlight flight) {
         if (flight.getId() != null) {
-            springRepo.findById(flight.getId()).ifPresent(entity -> {
+            springRepo.findByFlightId(flight.getId()).ifPresent(entity -> {
                 springRepo.delete(entity);
-                replicator.recordDeleted(FlightReplicaHandler.TYPE, String.valueOf(entity.getId()));
+                replicator.recordDeleted(FlightReplicaHandler.TYPE, String.valueOf(entity.getFlightId()));
             });
         }
     }
 
     @Override
     public Optional<ScheduledFlight> findById(Long id) {
-        return springRepo.findById(id).map(ScheduledFlightMapper::toDomain);
+        return springRepo.findByFlightId(id).map(ScheduledFlightMapper::toDomain);
     }
 
     @Override
