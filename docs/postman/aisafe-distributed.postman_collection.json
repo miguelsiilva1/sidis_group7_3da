@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "dc4b234f-d8b4-5d6d-acce-da8372c9f7cb",
     "name": "AISafe distributed",
-    "description": "End-to-end tests of the distributed AISafe: every replica up, local access, forwarding between replicas, aggregation, catalogs, calls between services, roles and failures. Select the environment \"AISafe k3s\" and run the folders in order (or the whole collection). See docs/postman/README.md.",
+    "description": "End-to-end tests of the distributed AISafe: every replica up, local access, forwarding between replicas, aggregation, catalogs, calls between services, the flight scheduling Saga, roles and failures. Select the environment \"AISafe k3s\" and run the folders in order (or the whole collection). See docs/postman/README.md.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -301,6 +301,78 @@
                   "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
                   "pm.test(\"UP\", () => pm.expect(pm.response.json().status).to.eql(\"UP\"));",
                   "pm.test(\"answered by airports-routes-2\", () => pm.expect(pm.response.headers.get(\"X-Node-Id\")).to.eql(\"airports-routes-2\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "flight-ops-0 is ready",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://{{node}}:{{fo_port_0}}/actuator/health/readiness",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"UP\", () => pm.expect(pm.response.json().status).to.eql(\"UP\"));",
+                  "pm.test(\"answered by flight-ops-0\", () => pm.expect(pm.response.headers.get(\"X-Node-Id\")).to.eql(\"flight-ops-0\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "flight-ops-1 is ready",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://{{node}}:{{fo_port_1}}/actuator/health/readiness",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"UP\", () => pm.expect(pm.response.json().status).to.eql(\"UP\"));",
+                  "pm.test(\"answered by flight-ops-1\", () => pm.expect(pm.response.headers.get(\"X-Node-Id\")).to.eql(\"flight-ops-1\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "flight-ops-2 is ready",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://{{node}}:{{fo_port_2}}/actuator/health/readiness",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"UP\", () => pm.expect(pm.response.json().status).to.eql(\"UP\"));",
+                  "pm.test(\"answered by flight-ops-2\", () => pm.expect(pm.response.headers.get(\"X-Node-Id\")).to.eql(\"flight-ops-2\"));"
                 ]
               }
             }
@@ -1612,7 +1684,577 @@
       ]
     },
     {
-      "name": "6. Access control (roles)",
+      "name": "6. Flights: the scheduling Saga (flight-ops)",
+      "description": "Scheduling a flight is a Saga. flight-ops asks airports-routes for the route (C2) and aircraft-maintenance for the aircraft (C1), looks for overlapping flights on every replica, saves the flight as pending, and sends a copy of it to aircraft-maintenance (C4: reserves the aircraft) and to airports-routes (C5: confirms the route). When a step fails, the steps already done are undone (the aircraft's copy is canceled) and the flight ends canceled. All the calls go through the entry of flight-ops' own machine, under the same correlation id.\n\nOne flight is scheduled on each replica: every replica must then list all three. Each run uses an aircraft of its own, which stays: an aircraft with flights cannot be deleted, and flights cannot be canceled through the API.",
+      "item": [
+        {
+          "name": "Flights on LIS-OPO before (airports-routes, US214)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://{{ar_vip}}/api/routes?status=active&sortBy=popularity",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{atcc_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "const lisOpo = ((pm.response.json()._embedded || {}).activeRouteResponseList || []).find(r => r.originIataCode === \"LIS\" && r.destinationIataCode === \"OPO\");",
+                  "pm.test(\"route LIS-OPO active\", () => pm.expect(lisOpo).to.be.an(\"object\"));",
+                  "pm.environment.set(\"lis_opo_flights\", lisOpo.popularity);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create an aircraft for the flights on aircraft-maintenance-1",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "http://{{node}}:{{am_port_1}}/api/aircrafts",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{atcc_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"registrationNumber\": \"{{flight_aircraft}}\",\n  \"modelName\": \"Airbus A320neo\",\n  \"manufacturingDate\": \"2021-05-01\",\n  \"seatCapacity\": 150,\n  \"range\": 5000.0,\n  \"status\": \"AVAILABLE\",\n  \"features\": []\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "{",
+                  "  const letters = \"ABCDEFGHIJKLMNOPQRSTUVWXYZ\";",
+                  "  pm.environment.set(\"flight_aircraft\", \"FL-\" + Array.from({length: 3}, () => letters[Math.floor(Math.random() * 26)]).join(\"\"));",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"answered by aircraft-maintenance-1\", () => pm.expect(pm.response.headers.get(\"X-Node-Id\")).to.eql(\"aircraft-maintenance-1\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Schedule a flight on flight-ops-0 (2030-06-01)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "http://{{node}}:{{fo_port_0}}/api/flights",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{atcc_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"aircraftId\": \"{{flight_aircraft}}\",\n  \"originIataCode\": \"LIS\",\n  \"destinationIataCode\": \"OPO\",\n  \"departureDateTime\": \"2030-06-01T08:00:00Z\",\n  \"arrivalDateTime\": \"2030-06-01T09:00:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"answered by flight-ops-0\", () => pm.expect(pm.response.headers.get(\"X-Node-Id\")).to.eql(\"flight-ops-0\"));",
+                  "pm.test(\"scheduled: every step of the Saga done\", () => pm.expect(pm.response.json().status).to.eql(\"SCHEDULED\"));",
+                  "pm.test(\"for the aircraft of this run\", () => pm.expect(pm.response.json().aircraftId).to.eql(pm.environment.get(\"flight_aircraft\")));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Schedule a flight on flight-ops-1 (2030-06-02)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "http://{{node}}:{{fo_port_1}}/api/flights",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{atcc_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"aircraftId\": \"{{flight_aircraft}}\",\n  \"originIataCode\": \"LIS\",\n  \"destinationIataCode\": \"OPO\",\n  \"departureDateTime\": \"2030-06-02T08:00:00Z\",\n  \"arrivalDateTime\": \"2030-06-02T09:00:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"answered by flight-ops-1\", () => pm.expect(pm.response.headers.get(\"X-Node-Id\")).to.eql(\"flight-ops-1\"));",
+                  "pm.test(\"scheduled: every step of the Saga done\", () => pm.expect(pm.response.json().status).to.eql(\"SCHEDULED\"));",
+                  "pm.test(\"for the aircraft of this run\", () => pm.expect(pm.response.json().aircraftId).to.eql(pm.environment.get(\"flight_aircraft\")));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Schedule a flight on flight-ops-2 (2030-06-03)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "http://{{node}}:{{fo_port_2}}/api/flights",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{atcc_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"aircraftId\": \"{{flight_aircraft}}\",\n  \"originIataCode\": \"LIS\",\n  \"destinationIataCode\": \"OPO\",\n  \"departureDateTime\": \"2030-06-03T08:00:00Z\",\n  \"arrivalDateTime\": \"2030-06-03T09:00:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"answered by flight-ops-2\", () => pm.expect(pm.response.headers.get(\"X-Node-Id\")).to.eql(\"flight-ops-2\"));",
+                  "pm.test(\"scheduled: every step of the Saga done\", () => pm.expect(pm.response.json().status).to.eql(\"SCHEDULED\"));",
+                  "pm.test(\"for the aircraft of this run\", () => pm.expect(pm.response.json().aircraftId).to.eql(pm.environment.get(\"flight_aircraft\")));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "The 3 flights, on flight-ops-0 (gathered from every replica)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://{{node}}:{{fo_port_0}}/api/flights?aircraftId={{flight_aircraft}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{atcc_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"answered by flight-ops-0\", () => pm.expect(pm.response.headers.get(\"X-Node-Id\")).to.eql(\"flight-ops-0\"));",
+                  "pm.test(\"not partial\", () => pm.expect(pm.response.headers.get(\"X-Partial-Result\")).to.not.eql(\"true\"));",
+                  "const flights = (pm.response.json()._embedded || {}).flightResponseList || [];",
+                  "pm.test(\"the 3 flights scheduled on the 3 replicas\", () => [\"2030-06-01\", \"2030-06-02\", \"2030-06-03\"].forEach(d =>",
+                  "  pm.expect(flights.filter(f => f.departureDateTime.startsWith(d)).length, d).to.eql(1)));",
+                  "pm.test(\"each flight with its own id\", () => pm.expect(new Set(flights.map(f => f.id)).size).to.eql(flights.length));",
+                  "pm.test(\"all scheduled\", () => flights.forEach(f => pm.expect(f.status).to.eql(\"SCHEDULED\")));",
+                  "console.log(pm.info.requestName, \"| X-Node-Id:\", pm.response.headers.get(\"X-Node-Id\"), \"| X-Data-Node:\", pm.response.headers.get(\"X-Data-Node\"), \"| X-Unreachable-Peers:\", pm.response.headers.get(\"X-Unreachable-Peers\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "The 3 flights, on flight-ops-1 (gathered from every replica)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://{{node}}:{{fo_port_1}}/api/flights?aircraftId={{flight_aircraft}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{atcc_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"answered by flight-ops-1\", () => pm.expect(pm.response.headers.get(\"X-Node-Id\")).to.eql(\"flight-ops-1\"));",
+                  "pm.test(\"not partial\", () => pm.expect(pm.response.headers.get(\"X-Partial-Result\")).to.not.eql(\"true\"));",
+                  "const flights = (pm.response.json()._embedded || {}).flightResponseList || [];",
+                  "pm.test(\"the 3 flights scheduled on the 3 replicas\", () => [\"2030-06-01\", \"2030-06-02\", \"2030-06-03\"].forEach(d =>",
+                  "  pm.expect(flights.filter(f => f.departureDateTime.startsWith(d)).length, d).to.eql(1)));",
+                  "pm.test(\"each flight with its own id\", () => pm.expect(new Set(flights.map(f => f.id)).size).to.eql(flights.length));",
+                  "pm.test(\"all scheduled\", () => flights.forEach(f => pm.expect(f.status).to.eql(\"SCHEDULED\")));",
+                  "console.log(pm.info.requestName, \"| X-Node-Id:\", pm.response.headers.get(\"X-Node-Id\"), \"| X-Data-Node:\", pm.response.headers.get(\"X-Data-Node\"), \"| X-Unreachable-Peers:\", pm.response.headers.get(\"X-Unreachable-Peers\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "The 3 flights, on flight-ops-2 (gathered from every replica)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://{{node}}:{{fo_port_2}}/api/flights?aircraftId={{flight_aircraft}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{atcc_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"answered by flight-ops-2\", () => pm.expect(pm.response.headers.get(\"X-Node-Id\")).to.eql(\"flight-ops-2\"));",
+                  "pm.test(\"not partial\", () => pm.expect(pm.response.headers.get(\"X-Partial-Result\")).to.not.eql(\"true\"));",
+                  "const flights = (pm.response.json()._embedded || {}).flightResponseList || [];",
+                  "pm.test(\"the 3 flights scheduled on the 3 replicas\", () => [\"2030-06-01\", \"2030-06-02\", \"2030-06-03\"].forEach(d =>",
+                  "  pm.expect(flights.filter(f => f.departureDateTime.startsWith(d)).length, d).to.eql(1)));",
+                  "pm.test(\"each flight with its own id\", () => pm.expect(new Set(flights.map(f => f.id)).size).to.eql(flights.length));",
+                  "pm.test(\"all scheduled\", () => flights.forEach(f => pm.expect(f.status).to.eql(\"SCHEDULED\")));",
+                  "console.log(pm.info.requestName, \"| X-Node-Id:\", pm.response.headers.get(\"X-Node-Id\"), \"| X-Data-Node:\", pm.response.headers.get(\"X-Data-Node\"), \"| X-Unreachable-Peers:\", pm.response.headers.get(\"X-Unreachable-Peers\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "The 3 flights, through the virtual IP",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://{{fo_vip}}/api/flights?aircraftId={{flight_aircraft}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{atcc_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"not partial\", () => pm.expect(pm.response.headers.get(\"X-Partial-Result\")).to.not.eql(\"true\"));",
+                  "const flights = (pm.response.json()._embedded || {}).flightResponseList || [];",
+                  "pm.test(\"the 3 flights scheduled on the 3 replicas\", () => [\"2030-06-01\", \"2030-06-02\", \"2030-06-03\"].forEach(d =>",
+                  "  pm.expect(flights.filter(f => f.departureDateTime.startsWith(d)).length, d).to.eql(1)));",
+                  "pm.test(\"each flight with its own id\", () => pm.expect(new Set(flights.map(f => f.id)).size).to.eql(flights.length));",
+                  "pm.test(\"all scheduled\", () => flights.forEach(f => pm.expect(f.status).to.eql(\"SCHEDULED\")));",
+                  "console.log(pm.info.requestName, \"| X-Node-Id:\", pm.response.headers.get(\"X-Node-Id\"), \"| X-Data-Node:\", pm.response.headers.get(\"X-Data-Node\"), \"| X-Unreachable-Peers:\", pm.response.headers.get(\"X-Unreachable-Peers\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "An overlapping flight on flight-ops-2: 409 (it overlaps the flight held by flight-ops-0)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "http://{{node}}:{{fo_port_2}}/api/flights",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{atcc_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"aircraftId\": \"{{flight_aircraft}}\",\n  \"originIataCode\": \"LIS\",\n  \"destinationIataCode\": \"OPO\",\n  \"departureDateTime\": \"2030-06-01T08:30:00Z\",\n  \"arrivalDateTime\": \"2030-06-01T09:30:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 409\", () => pm.response.to.have.status(409));",
+                  "pm.test(\"answered by flight-ops-2\", () => pm.expect(pm.response.headers.get(\"X-Node-Id\")).to.eql(\"flight-ops-2\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "A flight for an aircraft that does not exist: 404 (C1)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "http://{{fo_vip}}/api/flights",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{atcc_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"aircraftId\": \"ZZ-QQQ\",\n  \"originIataCode\": \"LIS\",\n  \"destinationIataCode\": \"OPO\",\n  \"departureDateTime\": \"2030-06-10T08:00:00Z\",\n  \"arrivalDateTime\": \"2030-06-10T09:00:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 404\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "A flight on a route that does not exist: 404 (C2)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "http://{{fo_vip}}/api/flights",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{atcc_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"aircraftId\": \"{{flight_aircraft}}\",\n  \"originIataCode\": \"ZZZ\",\n  \"destinationIataCode\": \"YYY\",\n  \"departureDateTime\": \"2030-06-10T08:00:00Z\",\n  \"arrivalDateTime\": \"2030-06-10T09:00:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 404\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "aircraft-maintenance holds the flights (C4): the aircraft cannot be deleted, 409",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "http://{{am_vip}}/api/aircrafts/{{flight_aircraft}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{atcc_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 409\", () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "airports-routes holds the flights (C5): LIS-OPO has 3 more",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://{{ar_vip}}/api/routes?status=active&sortBy=popularity",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{atcc_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"not partial\", () => pm.expect(pm.response.headers.get(\"X-Partial-Result\")).to.not.eql(\"true\"));",
+                  "const lisOpo = ((pm.response.json()._embedded || {}).activeRouteResponseList || []).find(r => r.originIataCode === \"LIS\" && r.destinationIataCode === \"OPO\");",
+                  "pm.test(\"3 more flights on LIS-OPO\", () => pm.expect(lisOpo.popularity).to.eql(Number(pm.environment.get(\"lis_opo_flights\")) + 3));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "7. Access control (roles)",
       "description": "Every service checks the token issued by the login and the role it carries.",
       "item": [
         {
@@ -1708,12 +2350,84 @@
               }
             }
           ]
+        },
+        {
+          "name": "Technician cannot schedule a flight: 403",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "http://{{fo_vip}}/api/flights",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{technician_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"aircraftId\": \"CS-TKA\",\n  \"originIataCode\": \"LIS\",\n  \"destinationIataCode\": \"OPO\",\n  \"departureDateTime\": \"2030-06-10T08:00:00Z\",\n  \"arrivalDateTime\": \"2030-06-10T09:00:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 403\", () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Operator cannot see flights (ATCC only): 403",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://{{fo_vip}}/api/flights?aircraftId=CS-TKA",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{operator_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 403\", () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
     {
-      "name": "7. Failures: with a replica down",
-      "description": "Stop a replica before running this folder, for example the one holding the copy of the sample data:\n\n    kubectl -n aisafe delete pod aircraft-maintenance-1 airports-routes-1 --wait=false\n\nor turn off its machine in Proxmox. The requests still succeed through the other replicas (the replica that does not answer appears in X-Unreachable-Peers). They also pass with every replica up.",
+      "name": "8. Failures: with a replica down",
+      "description": "Stop a replica before running this folder, for example the one holding the copy of the sample data:\n\n    kubectl -n aisafe delete pod aircraft-maintenance-1 airports-routes-1 flight-ops-1 --wait=false\n\nor turn off its machine in Proxmox. The requests still succeed through the other replicas (the replica that does not answer appears in X-Unreachable-Peers). They also pass with every replica up.",
       "item": [
         {
           "name": "CS-TKA on aircraft-maintenance-2",
@@ -1904,12 +2618,48 @@
               }
             }
           ]
+        },
+        {
+          "name": "The 3 flights on flight-ops-2",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://{{node}}:{{fo_port_2}}/api/flights?aircraftId={{flight_aircraft}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{atcc_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"answered by flight-ops-2\", () => pm.expect(pm.response.headers.get(\"X-Node-Id\")).to.eql(\"flight-ops-2\"));",
+                  "const flights = (pm.response.json()._embedded || {}).flightResponseList || [];",
+                  "pm.test(\"the 3 flights scheduled on the 3 replicas\", () => [\"2030-06-01\", \"2030-06-02\", \"2030-06-03\"].forEach(d =>",
+                  "  pm.expect(flights.filter(f => f.departureDateTime.startsWith(d)).length, d).to.eql(1)));",
+                  "pm.test(\"each flight with its own id\", () => pm.expect(new Set(flights.map(f => f.id)).size).to.eql(flights.length));",
+                  "pm.test(\"all scheduled\", () => flights.forEach(f => pm.expect(f.status).to.eql(\"SCHEDULED\")));",
+                  "console.log(pm.info.requestName, \"| X-Node-Id:\", pm.response.headers.get(\"X-Node-Id\"), \"| X-Data-Node:\", pm.response.headers.get(\"X-Data-Node\"), \"| X-Unreachable-Peers:\", pm.response.headers.get(\"X-Unreachable-Peers\"));"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
     {
-      "name": "8. Cleanup",
-      "description": "Deletes what this run created, so it can run again. The deletions are sent to replicas that do not hold the record: they forward them to one that does.",
+      "name": "9. Cleanup",
+      "description": "Deletes what this run created, so it can run again. The deletions are sent to replicas that do not hold the record: they forward them to one that does. The aircraft of folder 6 stays, with its flights: flights cannot be canceled through the API, and an aircraft with flights cannot be deleted.",
       "item": [
         {
           "name": "Delete the aircraft through aircraft-maintenance-2 (forwarded)",
