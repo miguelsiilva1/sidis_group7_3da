@@ -1,0 +1,751 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AISafe live map</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #12171e; --card: #151b23; --pill: #1b222b; --line: #252e39; --text: #d8dee5; --dim: #7a8590;
+    --faint: #4d5864; --ok: #3ccf8e; --warn: #f2b33d; --fail: #ff6b6b; --info: #9cc3ff; --off: #3a434d; --link: #3b4654;
+    --guest: #ff8fd0;
+    --svc-maint: #6b8cff; --svc-routes: #22c3c3; --svc-flights: #b9d655; --svc-login: #c59bff;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 12px/1.4 system-ui, sans-serif;
+         display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+  header { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: center; padding: 8px 16px;
+           border-bottom: 1px solid var(--line); background: var(--panel); }
+  header h1 { font-size: 13px; font-weight: 650; margin: 0 6px 0 0; }
+  header h1 span { color: var(--dim); font-weight: 400; }
+  .group { display: flex; gap: 5px; align-items: center; }
+  .group > label { color: var(--dim); }
+  button, select { background: #1a212a; color: var(--text); border: 1px solid var(--line); border-radius: 5px;
+                   padding: 3px 8px; font: inherit; cursor: pointer; }
+  button:hover, select:hover { border-color: #3a4756; }
+  button.on { background: #183d2f; border-color: var(--ok); }
+  input[type=checkbox] { vertical-align: -2px; }
+  .counters { margin-left: auto; display: flex; gap: 14px; align-items: baseline; font-variant-numeric: tabular-nums; color: var(--dim); }
+  .counters b { font-size: 14px; margin-left: 3px; }
+  #status { color: var(--fail); }
+  main { display: grid; grid-template-columns: minmax(0, 1fr) 360px; flex: 1; min-height: 0; }
+  #map { width: 100%; height: 100%; display: block; }
+  aside { border-left: 1px solid var(--line); display: grid; grid-template-rows: auto 1fr 1fr; grid-template-columns: minmax(0, 1fr);
+          min-height: 0; background: var(--panel); }
+  aside section { display: flex; flex-direction: column; min-height: 0; min-width: 0; border-bottom: 1px solid var(--line); }
+  aside h2 { font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .07em; color: var(--dim);
+             margin: 0; padding: 9px 12px 6px; }
+  .list { overflow-y: auto; padding: 0 8px 8px; font: 11px/1.5 ui-monospace, monospace; }
+  .row { padding: 2px 4px; border-radius: 4px; cursor: default; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #feed .row { white-space: normal; }
+  .row.click { cursor: pointer; }
+  .row.click:hover { background: #1a212a; }
+  .row .t { color: var(--faint); margin-right: 6px; }
+  .ok { color: var(--ok); } .warn { color: var(--warn); } .fail { color: var(--fail); }
+  .info { color: var(--info); } .vipc { color: var(--svc-login); } .dim { color: var(--dim); }
+  .legend { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 12px; padding: 0 12px 10px; font-size: 11px; color: var(--dim); }
+  .legend i { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 6px; }
+  .legend b { display: inline-block; width: 14px; height: 3px; border-radius: 2px; margin: 0 6px 3px 0; vertical-align: middle; }
+  .legend .note { grid-column: 1 / -1; margin-top: 4px; color: var(--faint); }
+  svg text { fill: var(--text); font-family: system-ui, sans-serif; }
+  .pod, .act { cursor: pointer; }
+  .pod:hover rect.box { stroke: #56677a; }
+  .pod .kill { opacity: 0; transition: opacity .15s; }
+  .pod:hover .kill { opacity: 1; }
+  .act:hover rect { stroke: var(--fail); }
+  .hint { color: var(--faint); font-size: 10.5px; text-transform: none; letter-spacing: 0; font-weight: 400; }
+  @media (max-width: 900px) { body { height: auto; overflow: auto; } main { grid-template-columns: 1fr; } #map { height: 85vh; }
+                              aside { border-left: 0; grid-template-rows: auto 280px 280px; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>AISafe <span>· live map</span></h1>
+  <div class="group">
+    <select id="op">
+      <option value="read">read an aircraft</option>
+      <option value="create">create an aircraft</option>
+      <option value="delete">delete it</option>
+      <option value="list">list aircraft</option>
+      <option value="route">read a route</option>
+      <option value="compatible">compatible aircraft</option>
+      <option value="schedule">schedule a flight</option>
+      <option value="flights">flights of an aircraft</option>
+      <option value="login">log in</option>
+    </select>
+    <select id="target" title="Where the request goes in">
+      <option value="vip">via virtual IP</option>
+      <option value="0">to replica 0</option>
+      <option value="1">to replica 1</option>
+      <option value="2">to replica 2</option>
+    </select>
+    <button id="send">Send</button>
+    <button id="traffic" title="A request every 1.5 s through the virtual IPs">Steady traffic</button>
+  </div>
+  <div class="group">
+    <label>Restart</label>
+    <button data-restart="aircraft-maintenance">maintenance</button>
+    <button data-restart="airports-routes">routes</button>
+    <button data-restart="flight-ops">flights</button>
+    <button data-restart="login">login</button>
+  </div>
+  <div class="group">
+    <select id="speed" title="Speed of the animations">
+      <option value="slow">slow</option>
+      <option value="normal" selected>normal</option>
+      <option value="fast">fast</option>
+    </select>
+    <label><input type="checkbox" id="bg"> background sync</label>
+  </div>
+  <div class="counters" title="Requests sent from this page (Send and Steady traffic)">
+    <span>answered<b class="ok" id="c-ok">0</b></span>
+    <span>refused<b class="warn" id="c-4xx">0</b></span>
+    <span title="503 with Retry-After: the service is not sure yet and asks the client to try again">try again<b class="info" id="c-retry">0</b></span>
+    <span>failed<b class="fail" id="c-fail">0</b></span>
+    <button id="reset" title="Reset the counters">reset</button>
+  </div>
+  <span id="status"></span>
+</header>
+<main>
+  <svg id="map" viewBox="0 0 1200 920" preserveAspectRatio="xMidYMid meet">
+    <defs>
+      <pattern id="stripes" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+        <rect width="3" height="6" fill="#4a2424"></rect>
+      </pattern>
+    </defs>
+    <g id="links"></g>
+    <g id="static"></g>
+    <g id="pods"></g>
+    <g id="flows"></g>
+  </svg>
+  <aside>
+    <section>
+      <h2>Legend</h2>
+      <div class="legend">
+        <span><b style="background: var(--svc-maint)"></b>aircraft-maintenance</span>
+        <span><i style="background: var(--ok)"></i>ready, in traffic</span>
+        <span><b style="background: var(--svc-routes)"></b>airports-routes</span>
+        <span><i style="background: var(--warn)"></i>starting, out of traffic</span>
+        <span><b style="background: var(--svc-flights)"></b>flight-ops</span>
+        <span><i style="background: var(--fail)"></i>stopping, failing; a failed try</span>
+        <span><b style="background: var(--svc-login)"></b>login</span>
+        <span><i style="background: var(--faint)"></i>✕n: not asking replica n</span>
+        <span><b style="background: var(--guest)"></b>away from its machine</span>
+        <span class="note">A request travels in its service's colour. The tags on a machine's network line are the
+          virtual IPs it answers for (MetalLB). Click a replica to kill it; ⏻ and ❄ power a machine off or freeze it.</span>
+      </div>
+    </section>
+    <section>
+      <h2>Requests <span class="hint">newest at the bottom · click to replay</span></h2>
+      <div class="list" id="requests"></div>
+    </section>
+    <section>
+      <h2>What happened</h2>
+      <div class="list" id="feed"></div>
+    </section>
+  </aside>
+</main>
+<script>
+const NS = "http://www.w3.org/2000/svg";
+const $ = (id) => document.getElementById(id);
+const SERVICES = ["aircraft-maintenance", "airports-routes", "flight-ops", "login"];
+const SHORT = { "aircraft-maintenance": "maintenance", "airports-routes": "routes", "flight-ops": "flights", login: "login" };
+const SVC_COLOR = { "aircraft-maintenance": "var(--svc-maint)", "airports-routes": "var(--svc-routes)",
+                    "flight-ops": "var(--svc-flights)", login: "var(--svc-login)" };
+const COLOR = { ok: "var(--ok)", warn: "var(--warn)", fail: "var(--fail)", info: "var(--info)" };
+
+let state = null;
+let pos = {};             // pod name -> {x, y, w, h, node, app}
+let cards = {};           // node name -> {x, y, w, h, ns, index}
+let doors = {};           // "a>b" -> {x, y, side}: where machine a's link to machine b leaves its card
+let links = {};           // "a>b" -> points of the link from machine a to machine b
+let badges = {};          // service -> {x, y, node}: its virtual IP, on the network line of the machine answering for it
+const home = {};          // pod name -> its machine, learned while every service has one replica per machine
+const circuits = {};      // "from|to" -> until (ms): "from" does not ask "to"
+const highlight = {};     // pod name -> {color, until}: the pods a request is going through
+const counters = { ok: 0, "4xx": 0, retry: 0, fail: 0 };
+const playing = new Set();
+
+// --- Layout (viewBox 1200 x 920) -------------------------------------------------------------------
+// The client on top; the network (the machines' bridge, behind the router); the three machines at
+// the corners of a triangle. Only two kinds of lines: the network line down to each machine (with
+// the virtual IPs that machine answers for), and one link between each pair of machines. A request
+// between machines leaves its card on the side facing the other machine, follows their link, and
+// enters the other card: a line always joins exactly two things.
+const CLIENT = { x: 530, y: 14, w: 140, h: 36 };
+const HUB = { x: 400, y: 84, w: 400, h: 46 };
+const API = { x: 880, y: 88, w: 200, h: 38 };
+const SPOKE_Y = 150;                                    // where the network lines turn towards the machines
+const CARD_W = 300, CARD_POS = [{ x: 50, y: 250 }, { x: 850, y: 250 }, { x: 450, y: 570 }];
+const ROW0 = 74, PITCH = 32, PILL_H = 25, RAIL = 11, SIDE_DOOR = 140;   // relative to the card
+
+function el(tag, attrs, parent, text) {
+  const e = document.createElementNS(NS, tag);
+  for (const [k, v] of Object.entries(attrs || {})) if (v !== undefined && v !== null) e.setAttribute(k, v);
+  if (text !== undefined) e.textContent = text;
+  if (parent) parent.appendChild(e);
+  return e;
+}
+
+function codeClass(code, flags) {
+  if (!code || code >= 500 || (flags && flags !== "-")) return "fail";
+  if (code >= 400) return "warn";
+  return "ok";
+}
+
+function hhmmss(t) { return new Date(t).toTimeString().slice(0, 8); }
+const wire = (points) => "M" + points.map((p) => `${p.x},${p.y}`).join(" L");
+const LINE = { fill: "none", stroke: "var(--link)", "stroke-width": 2.5, "stroke-linejoin": "round" };
+const proxmox = () => state.config.machines === "proxmox";
+const appOf = (name) => SERVICES.find((s) => name && name.startsWith(s + "-"));
+const index = (name) => name.split("-").pop();
+
+// --- States -------------------------------------------------------------------------------------
+
+function nodeState(node) {
+  const vm = state.vms[node.name];
+  const offMark = node.taints.includes("aisafe/machine-off"), isolated = node.taints.includes("node.kubernetes.io/out-of-service");
+  const notes = [];
+  if (isolated) notes.push("isolated: its replicas are reborn elsewhere");
+  else if (offMark) notes.push("its replicas left the traffic and wait");
+  if (node.down_since) notes.push(`down ${Math.max(0, Math.round(Date.now() / 1000 - node.down_since))} s`);
+  if (vm && vm.maintenance) notes.push("maintenance: not turned on");
+  if (vm && vm.status !== "running") return { cls: "off", text: `machine ${vm.status}`, notes };
+  if (!node.ready) {
+    const booting = vm && vm.uptime < 120;
+    return { cls: booting ? "warn" : "fail", text: booting ? "machine starting" : vm ? "on, not answering (frozen?)" : "not answering", notes };
+  }
+  return { cls: "ok", text: "ready", notes };
+}
+
+function podState(p) {
+  if (p.terminating) return { cls: "fail", text: "stopping" };
+  if (!p.node) return { cls: "warn", text: "waiting for a machine" };
+  if (["CrashLoopBackOff", "ImagePullBackOff", "ErrImagePull", "CreateContainerError"].includes(p.reason))
+    return { cls: "fail", text: "failing" };
+  if (p.phase === "Pending") return { cls: "warn", text: p.reason === "ContainerCreating" ? "being created" : "starting" };
+  if (!p.ready) return { cls: "warn", text: "starting" };
+  return { cls: "ok", text: "ready" };
+}
+
+// Each replica's machine, learned while every service has exactly one ready replica per machine
+function learnHomes(nodes) {
+  for (const svc of SERVICES) {
+    const pods = state.pods.filter((p) => p.app === svc && !p.terminating);
+    if (pods.length === nodes.length && pods.every((p) => p.ready) && new Set(pods.map((p) => p.node)).size === nodes.length)
+      for (const p of pods) home[p.name] = p.node;
+  }
+}
+
+// --- Drawing ------------------------------------------------------------------------------------
+
+function draw() {
+  const g = $("static"), L = $("links"), podsG = $("pods");
+  for (const x of [g, L, podsG]) x.replaceChildren();
+  pos = {}; cards = {}; doors = {}; links = {}; badges = {};
+  const cfg = state.config, nodes = cfg.nodes.slice(0, 3), net = cfg.network || {};
+  learnHomes(nodes);
+  const byNode = {};
+  for (const p of state.pods) (byNode[p.node || ""] ||= []).push(p);
+
+  // The host of the machines, the client, the network, the Proxmox API
+  el("rect", { x: 24, y: 70, width: 1152, height: 842, rx: 18, fill: "#ffffff", "fill-opacity": .015, stroke: "var(--line)" }, L);
+  el("text", { x: 44, y: 96, "font-size": 10, "font-weight": 600, "letter-spacing": ".08em", fill: "var(--faint)" }, g,
+     (proxmox() ? `PROXMOX HOST · ${cfg.proxmox.replace(/^.*@/, "")}` : "MACHINES"));
+  el("rect", { x: CLIENT.x, y: CLIENT.y, width: CLIENT.w, height: CLIENT.h, rx: 8, fill: "#16202c", stroke: "var(--info)", "stroke-opacity": .6 }, g);
+  el("text", { x: CLIENT.x + CLIENT.w / 2, y: CLIENT.y + 16, "text-anchor": "middle", "font-size": 12.5, "font-weight": 600 }, g, "client");
+  el("text", { x: CLIENT.x + CLIENT.w / 2, y: CLIENT.y + 29, "text-anchor": "middle", "font-size": 9.5, fill: "var(--dim)" }, g, "this computer");
+  el("path", { d: wire([{ x: 600, y: CLIENT.y + CLIENT.h }, { x: 600, y: HUB.y }]), ...LINE }, L);
+  el("rect", { x: HUB.x, y: HUB.y, width: HUB.w, height: HUB.h, rx: 23, fill: "#18202a", stroke: "#3b4654" }, g);
+  el("text", { x: 600, y: HUB.y + 19, "text-anchor": "middle", "font-size": 12, "font-weight": 600 }, g,
+     `network${net.bridge ? ` · ${net.bridge}` : ""}`);
+  el("text", { x: 600, y: HUB.y + 34, "text-anchor": "middle", "font-size": 9.5, fill: "var(--dim)" }, g,
+     `router ${net.gateway || ""}${proxmox() ? " (the Proxmox host)" : ""}`);
+  if (proxmox()) {
+    el("rect", { x: API.x, y: API.y, width: API.w, height: API.h, rx: 8, fill: "#171d24", stroke: "#3a4552", "stroke-dasharray": "4 3" }, g);
+    el("text", { x: API.x + API.w / 2, y: API.y + 16, "text-anchor": "middle", "font-size": 11, "font-weight": 600 }, g, "Proxmox API");
+    el("text", { x: API.x + API.w / 2, y: API.y + 30, "text-anchor": "middle", "font-size": 9, fill: "var(--dim)" }, g, "the vigia turns machines on here");
+  }
+
+  // Machines: card sizes first (links and doors depend on them)
+  nodes.forEach((n, i) => {
+    const pods = byNode[n.name] || [];
+    const rows = 2 + SERVICES.reduce((a, svc) => a + Math.max(1, pods.filter((p) => p.app === svc).length), 0);
+    const node = state.nodes.find((k) => k.name === n.name) || { name: n.name, ready: false, taints: [] };
+    cards[n.name] = { ...CARD_POS[i], w: CARD_W, h: ROW0 + rows * PITCH + 6, ns: nodeState(node), index: i };
+  });
+  placeDoors(nodes);
+  drawLinks(L, nodes);
+  nodes.forEach((n) => drawSpoke(L, g, n.name));
+  nodes.forEach((n) => drawCard(g, podsG, n, byNode[n.name] || []));
+
+  // Replicas waiting for a machine: below the first machine, two per row
+  const waiting = byNode[""] || [];
+  if (waiting.length) {
+    el("text", { x: 50, y: 662, "font-size": 10, "font-weight": 600, fill: "var(--warn)" }, g, "waiting for a machine:");
+    waiting.forEach((p, k) => drawPod(podsG, p, 50 + (k % 2) * 185, 670 + Math.floor(k / 2) * PITCH, 175, null));
+  }
+  const lost = SERVICES.filter((svc) => !state.vips[svc]);
+  if (lost.length) el("text", { x: 600, y: HUB.y + HUB.h + 16, "text-anchor": "middle", "font-size": 10, "font-weight": 600, fill: "var(--fail)" }, g,
+                     lost.map((svc) => `${cfg.vips[svc]} (${SHORT[svc]}): no machine answers`).join(" · "));
+}
+
+// Machines 0 and 1 face each other on their sides; both reach machine 2 from a bottom corner, and
+// machine 2 has a door on each side
+function placeDoors(nodes) {
+  const [a, b, c] = nodes.map((n) => n.name);
+  const A = cards[a], B = cards[b], C = cards[c];
+  doors[`${a}>${b}`] = { x: A.x + A.w, y: A.y + SIDE_DOOR, side: "right" };
+  doors[`${b}>${a}`] = { x: B.x, y: B.y + SIDE_DOOR, side: "left" };
+  if (!C) return;
+  doors[`${a}>${c}`] = { x: A.x + A.w - RAIL, y: A.y + A.h, side: "right" };
+  doors[`${b}>${c}`] = { x: B.x + RAIL, y: B.y + B.h, side: "left" };
+  doors[`${c}>${a}`] = { x: C.x, y: C.y + SIDE_DOOR - 30, side: "left" };
+  doors[`${c}>${b}`] = { x: C.x + C.w, y: C.y + SIDE_DOOR - 30, side: "right" };
+}
+
+function drawLinks(L, nodes) {
+  const names = nodes.map((n) => n.name);
+  for (let i = 0; i < names.length; i++) for (let j = i + 1; j < names.length; j++) {
+    const a = names[i], b = names[j], da = doors[`${a}>${b}`], db = doors[`${b}>${a}`];
+    if (!da || !db) continue;
+    let pts = [{ x: da.x, y: da.y }, { x: db.x, y: db.y }];
+    // The link between the two top machines hops over the network line to the third
+    if (i === 0 && j === 1 && names[2]) {
+      const x = 600, y = da.y, r = 7;
+      pts = [{ x: da.x, y }, { x: x - r, y }, { x: x - r * .7, y: y - r * .7 }, { x, y: y - r }, { x: x + r * .7, y: y - r * .7 }, { x: x + r, y }, { x: db.x, y }];
+    }
+    links[`${a}>${b}`] = pts;
+    links[`${b}>${a}`] = [...pts].reverse();
+    const down = cards[a].ns.cls !== "ok" || cards[b].ns.cls !== "ok";
+    el("path", { d: wire(pts), ...LINE, "stroke-dasharray": down ? "6 5" : null, "stroke-opacity": down ? .5 : 1 }, L);
+    const m = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+    el("text", { x: m.x + (pts.length > 2 ? 0 : 8), y: m.y - 7, "text-anchor": pts.length > 2 ? "middle" : "start",
+                 "font-size": 9, fill: "var(--faint)" }, L, `${a} ↔ ${b}`);
+  }
+}
+
+// The network line from the hub to a machine, and the virtual IPs that machine answers for
+function spokePoints(node) {
+  const c = cards[node], cx = c.x + c.w / 2;
+  if (c.index === 2) return [{ x: 600, y: HUB.y + HUB.h }, { x: cx, y: c.y }];
+  const hx = c.index === 0 ? HUB.x + 70 : HUB.x + HUB.w - 70;
+  return [{ x: hx, y: HUB.y + HUB.h }, { x: hx, y: SPOKE_Y }, { x: cx, y: SPOKE_Y }, { x: cx, y: c.y }];
+}
+
+function drawSpoke(L, g, node) {
+  const c = cards[node], pts = spokePoints(node), cx = c.x + c.w / 2;
+  el("path", { d: wire(pts), ...LINE, "stroke-dasharray": c.ns.cls === "ok" ? null : "6 5" }, L);
+  let k = 0;
+  SERVICES.forEach((svc) => {
+    if (state.vips[svc] !== node) return;
+    const y = c.y - 26 - k * 21;
+    badges[svc] = { x: cx, y, node };
+    const text = `${SHORT[svc]} ${state.config.vips[svc]}`;
+    const w = text.length * 5.6 + 18;
+    const b = el("g", {}, g);
+    el("rect", { x: cx - w / 2, y: y - 8.5, width: w, height: 17, rx: 8.5, fill: "var(--bg)", stroke: SVC_COLOR[svc], "stroke-width": 1.3 }, b);
+    el("text", { x: cx, y: y + 3.5, "text-anchor": "middle", "font-size": 9.5, "font-weight": 600, fill: SVC_COLOR[svc] }, b, text);
+    el("title", {}, b, `Virtual IP ${state.config.vips[svc]} of ${svc}: ${node} answers for it on the network (MetalLB). `
+                     + "If this machine is lost, another one takes it over.");
+    k++;
+  });
+}
+
+function drawCard(g, podsG, n, pods) {
+  const c = cards[n.name], { x, y, w, h, ns } = c;
+  const vm = state.vms[n.name];
+  el("rect", { x, y, width: w, height: h, rx: 12, fill: ns.cls === "off" ? "#10151a" : "var(--card)",
+               stroke: ns.cls === "ok" ? "var(--line)" : ns.cls === "off" ? "var(--off)" : COLOR[ns.cls],
+               "stroke-width": ns.cls === "ok" ? 1 : 1.8, "stroke-dasharray": ns.cls === "off" ? "6 5" : null }, g);
+  el("text", { x: x + 16, y: y + 24, "font-weight": 700, "font-size": 15 }, g, n.name);
+  el("text", { x: x + 16, y: y + 39, "font-size": 10, fill: "var(--dim)" }, g, n.ip + (vm ? `  ·  VM ${vm.id}` : ""));
+  el("circle", { cx: x + 20, cy: y + 51, r: 3.2, fill: COLOR[ns.cls] || "var(--off)" }, g);
+  el("text", { x: x + 28, y: y + 54.5, "font-size": 10.5, fill: ns.cls === "ok" ? "var(--dim)" : COLOR[ns.cls] || "var(--dim)" }, g, ns.text);
+  if (ns.notes.length) el("text", { x: x + 16, y: y + 67, "font-size": 9.5, fill: "var(--warn)" }, g, ns.notes.join(" · "));
+
+  // MetalLB, where the network line comes in
+  const speaker = pods.find((p) => p.app === "metallb-speaker");
+  const controller = pods.some((p) => p.app === "metallb-controller");
+  const sp = speaker ? podState(speaker) : { cls: "fail", text: "not running" };
+  const tag = el("g", {}, g), tx = x + w / 2;
+  el("rect", { x: tx - 38, y: y - 9, width: 76, height: 18, rx: 9, fill: "#1b1730", stroke: "#3b3158" }, tag);
+  el("circle", { cx: tx - 27, cy: y, r: 3, fill: COLOR[sp.cls] }, tag);
+  el("text", { x: tx - 19, y: y + 3.5, "font-size": 9.5, "font-weight": 600 }, tag, controller ? "MetalLB ⚙" : "MetalLB");
+  el("title", {}, tag, `MetalLB on ${n.name}: ${sp.text}. It answers on the network for the virtual IPs shown above it`
+                     + `${controller ? "; ⚙ the MetalLB controller runs here too" : ""}.`);
+
+  // Power off and freeze
+  [["⏻", "node-off", "power off"], ["❄", "node-freeze", "freeze"]].forEach(([icon, op, label], k) => {
+    const b = el("g", { class: "act", transform: `translate(${x + w - 56 + k * 24},${y + 12})` }, g);
+    el("rect", { width: 20, height: 18, rx: 5, fill: "#1a212a", stroke: "var(--line)" }, b);
+    el("text", { x: 10, y: 13, "text-anchor": "middle", "font-size": 11, fill: "var(--dim)" }, b, icon);
+    el("title", {}, b, `${label} ${n.name}`);
+    b.addEventListener("click", () => { if (confirm(`${label} ${n.name}?`)) act({ op, node: n.name }); });
+  });
+
+  // Rows: the entry, each service (its replicas here, or where its replica is now), the vigia
+  const px = x + RAIL + 10, pw = w - 2 * (RAIL + 10);
+  let row = 0;
+  const at = () => y + ROW0 + (row++) * PITCH;
+  for (const p of pods.filter((p) => p.app === "entry")) drawPod(podsG, p, px, at(), pw, n.name);
+  if (!pods.some((p) => p.app === "entry")) row++;
+  for (const svc of SERVICES) {
+    const here = pods.filter((p) => p.app === svc).sort((a, b) => a.name.localeCompare(b.name));
+    for (const p of here) drawPod(podsG, p, px, at(), pw, n.name);
+    if (here.length) continue;
+    const away = state.pods.find((p) => p.app === svc && home[p.name] === n.name);
+    const ry = at();
+    el("rect", { x: px, y: ry, width: pw, height: PILL_H, rx: PILL_H / 2, fill: "none",
+                 stroke: "var(--guest)", "stroke-dasharray": "3 3", "stroke-opacity": .7 }, g);
+    el("text", { x: px + 14, y: ry + 16, "font-size": 10, fill: "var(--guest)" }, g,
+       !away ? `${SHORT[svc]}: no replica here`
+       : !away.node ? `${SHORT[svc]} ${index(away.name)}: waiting for a machine`
+       : `${SHORT[svc]} ${index(away.name)} is on ${away.node} for now`);
+  }
+  for (const p of pods.filter((p) => p.app === "vigia")) drawPod(podsG, p, px, at(), pw, n.name);
+}
+
+function drawPod(g, p, x, y, w, node) {
+  const h = PILL_H;
+  pos[p.name] = { x, y, w, h, node, app: p.app };
+  const st = podState(p);
+  const guest = home[p.name] && p.node && home[p.name] !== p.node;
+  const leader = p.app === "vigia" && state.vigia && state.vigia.startsWith(p.name);
+  const lit = highlight[p.name] && highlight[p.name].until > Date.now() ? highlight[p.name].color : null;
+  const color = SVC_COLOR[p.app];
+  const b = el("g", { class: "pod", transform: `translate(${x},${y})` }, g);
+  el("rect", { class: "box", width: w, height: h, rx: h / 2, fill: p.terminating ? "url(#stripes)" : "var(--pill)",
+               stroke: lit || (guest ? "var(--guest)" : "var(--line)"), "stroke-width": lit ? 2.2 : guest ? 1.4 : 1 }, b);
+  if (color) el("rect", { x: 0, y: 0, width: 6, height: h, rx: 3, fill: color }, b);
+  el("circle", { cx: 17, cy: h / 2, r: 3.4, fill: COLOR[st.cls] }, b);
+  const label = p.app === "entry" ? "Envoy · entry"
+              : p.app === "vigia" ? (leader ? "vigia ★ acting" : "vigia")
+              : color ? `${SHORT[p.app]} ${index(p.name)}` : p.name;
+  el("text", { x: 27, y: h / 2 + 4, "font-size": 11, "font-weight": 600 }, b, label);
+  // On the right: what is unusual
+  const notes = [];
+  const skips = Object.keys(circuits).filter((k) => k.startsWith(p.name + "|") && circuits[k] > Date.now()).map((k) => `✕${index(k.split("|")[1])}`);
+  if (skips.length) notes.push(skips.join(" "));
+  if (guest) notes.push(`from ${home[p.name]}`);
+  if (st.cls !== "ok") notes.push(st.text);
+  if (p.restarts) notes.push(`↻${p.restarts}`);
+  if (notes.length) el("text", { x: w - 22, y: h / 2 + 3.5, "text-anchor": "end", "font-size": 9.5,
+                                 fill: skips.length ? "var(--fail)" : guest ? "var(--guest)" : st.cls === "ok" ? "var(--faint)" : COLOR[st.cls] },
+                       b, notes.join(" · "));
+  el("text", { class: "kill", x: w - 9, y: h / 2 + 4, "text-anchor": "end", "font-size": 11, fill: "var(--fail)" }, b, "✕");
+  el("title", {}, b, `${p.name}: ${st.text}${p.reason ? ` (${p.reason})` : ""}${guest ? `, away from ${home[p.name]}` : ""}`
+                   + `${p.restarts ? `, ${p.restarts} restarts` : ""}${skips.length ? `, not asking replica ${skips.join(", ")} for a while` : ""}. Click to kill it.`);
+  b.addEventListener("click", () => act({ op: "kill", pod: p.name }));
+}
+
+// --- Routes along the lines -----------------------------------------------------------------------
+
+const mid = (p) => ({ x: p.x + p.w / 2, y: p.y + p.h / 2 });
+const rightEnd = (p) => ({ x: p.x + p.w, y: p.y + p.h / 2 });
+const leftEnd = (p) => ({ x: p.x, y: p.y + p.h / 2 });
+
+// From a pill to a door of its card, along the card's inner margin on that side
+function toDoor(pod, door) {
+  const p = pos[pod], c = cards[p.node];
+  if (door.side === "right") {
+    const rx = c.x + c.w - RAIL;
+    return [rightEnd(p), { x: rx, y: rightEnd(p).y }, { x: rx, y: door.y }, { x: door.x, y: door.y }];
+  }
+  const lx = c.x + RAIL;
+  return [leftEnd(p), { x: lx, y: leftEnd(p).y }, { x: lx, y: door.y }, { x: door.x, y: door.y }];
+}
+
+// Between two pills of one machine, along its left margin
+function inside(a, b) {
+  const p = pos[a], q = pos[b], lx = cards[p.node].x + RAIL;
+  return [leftEnd(p), { x: lx, y: leftEnd(p).y }, { x: lx, y: leftEnd(q).y }, leftEnd(q)];
+}
+
+// A replica calls another service through its machine's entry, along the right margin
+function call(pod, entry) {
+  const p = pos[pod], e = pos[entry], rx = cards[p.node].x + cards[p.node].w - RAIL;
+  return [rightEnd(p), { x: rx, y: rightEnd(p).y }, { x: rx, y: rightEnd(e).y }, rightEnd(e)];
+}
+
+// Pill on one machine -> pill on another: out of its card, along the link, into the other card
+function across(a, b) {
+  const na = pos[a].node, nb = pos[b].node, link = links[`${na}>${nb}`];
+  if (!link) return [mid(pos[a]), mid(pos[b])];
+  return [...toDoor(a, doors[`${na}>${nb}`]), ...link, ...toDoor(b, doors[`${nb}>${na}`]).reverse()];
+}
+
+function between(a, b) {
+  if (!pos[a].node || !pos[b].node || !cards[pos[a].node] || !cards[pos[b].node]) return [mid(pos[a]), mid(pos[b])];
+  return pos[a].node === pos[b].node ? inside(a, b) : across(a, b);
+}
+
+// The client to the network, then down the network line of the machine answering for the
+// virtual IP, to its tag
+function clientToVip(svc) {
+  const b = badges[svc], start = [{ x: 600, y: CLIENT.y + CLIENT.h }, { x: 600, y: HUB.y + HUB.h / 2 }];
+  if (!b) return start;
+  return [...start, ...spokePoints(b.node).slice(0, -1), { x: b.x, y: b.y }];
+}
+
+// From the virtual IP through MetalLB to the entry of that machine
+function vipToEntry(svc, entry) {
+  const b = badges[svc], e = pos[entry];
+  if (!b || !e) return null;
+  return [{ x: b.x, y: b.y }, { x: b.x, y: e.y }];
+}
+
+// Straight to one replica: the node port of the first machine, then on to the replica
+function clientToPod(pod) {
+  const first = state.config.nodes[0].name, c = cards[first], p = pos[pod];
+  const start = [{ x: 600, y: CLIENT.y + CLIENT.h }, { x: 600, y: HUB.y + HUB.h / 2 }, ...spokePoints(first)];
+  const lx = c.x + RAIL, rx = c.x + c.w - RAIL, top = c.y + 8;
+  const inFirst = [{ x: c.x + c.w / 2, y: top }];
+  if (p.node === first) return [...start, ...inFirst, { x: lx, y: top }, { x: lx, y: leftEnd(p).y }, leftEnd(p)];
+  const d = doors[`${first}>${p.node}`], link = links[`${first}>${p.node}`];
+  if (!d || !link) return [...start, mid(p)];
+  return [...start, ...inFirst, { x: rx, y: top }, { x: rx, y: d.y }, { x: d.x, y: d.y }, ...link,
+          ...toDoor(pod, doors[`${p.node}>${first}`]).reverse()];
+}
+
+// kind: "call" for a call between services (a replica and its machine's entry)
+function route(from, to, kind) {
+  const vip = (n) => n.startsWith("vip:");
+  const rev = (r) => r && r.reverse();
+  if (from === "client" && vip(to)) return clientToVip(to.slice(4));
+  if (vip(from) && to === "client") return rev(clientToVip(from.slice(4)));
+  if (vip(from) && pos[to]) return vipToEntry(from.slice(4), to);
+  if (pos[from] && vip(to)) return rev(vipToEntry(to.slice(4), from));
+  if (from === "client" && pos[to]) return clientToPod(to);
+  if (pos[from] && to === "client") return rev(clientToPod(from));
+  if (pos[from] && to === "api") return [mid(pos[from]), { x: API.x + API.w / 2, y: API.y + API.h }];
+  if (from === "api" && to.startsWith("vm:") && cards[to.slice(3)]) {
+    const c = cards[to.slice(3)];
+    return [{ x: API.x + API.w / 2, y: API.y + API.h }, { x: c.x + c.w - 20, y: c.y }];
+  }
+  if (!pos[from] || !pos[to]) return null;
+  if (kind === "call" && pos[to].app === "entry" && pos[from].node === pos[to].node) return call(from, to);
+  if (kind === "call" && pos[from].app === "entry" && pos[from].node === pos[to].node) return rev(call(to, from));
+  return between(from, to);
+}
+
+// --- Animating requests ---------------------------------------------------------------------------
+
+const SPEED = { slow: 0.12, normal: 0.26, fast: 0.6 };   // viewBox units per ms along the lines
+
+function light(pod, color, ms) {
+  if (pos[pod]) highlight[pod] = { color, until: Date.now() + ms };
+}
+
+// A request travels in its service's colour; a failure in red, a refusal in amber
+function hopColor(cls, svc) {
+  return cls === "fail" || cls === "warn" ? COLOR[cls] : SVC_COLOR[svc] || COLOR.info;
+}
+
+function hop(from, to, cls, label, dashed, kind, svc) {
+  return new Promise((resolve) => {
+    const points = from && to ? route(from, to, kind) : null;
+    if (!points || points.length < 2) return resolve();
+    const color = hopColor(cls, svc || appOf(from) || appOf(to));
+    const path = el("path", { d: wire(points), fill: "none", stroke: color, "stroke-width": dashed ? 1.6 : 3,
+                              "stroke-linejoin": "round", "stroke-linecap": "round", "stroke-opacity": dashed ? .55 : .95 }, $("flows"));
+    const len = path.getTotalLength();
+    path.setAttribute("stroke-dasharray", `${len} ${len}`);   // the trail grows behind the dot
+    path.setAttribute("stroke-dashoffset", len);
+    const dot = el("circle", { r: dashed ? 3 : 5.5, fill: color, stroke: "var(--bg)", "stroke-width": 1.5, cx: points[0].x, cy: points[0].y }, $("flows"));
+    const duration = Math.max(450, len / SPEED[$("speed").value]);
+    if (!dashed) { light(from, color, duration + 300); light(to, color, duration + 300); draw(); }
+    const t0 = performance.now();
+    const step = (now) => {
+      const k = Math.min(1, (now - t0) / duration);
+      const pt = path.getPointAtLength(len * k);
+      dot.setAttribute("cx", pt.x); dot.setAttribute("cy", pt.y);
+      path.setAttribute("stroke-dashoffset", len * (1 - k));
+      if (k < 1) return requestAnimationFrame(step);
+      dot.remove();
+      const end = to === "client" ? { x: CLIENT.x + CLIENT.w + 2, y: CLIENT.y + 26 } : points.at(-1);
+      if (label) {
+        const t = el("text", { x: end.x + 7, y: end.y - 5, "font-size": 12, "font-weight": 700,
+                               fill: cls === "fail" || cls === "warn" ? COLOR[cls] : "var(--ok)",
+                               stroke: "var(--bg)", "stroke-width": 3.5, "paint-order": "stroke" }, $("flows"), label);
+        setTimeout(() => t.remove(), 2500);
+      }
+      path.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 2000 }).onfinish = () => path.remove();
+      resolve();
+    };
+    requestAnimationFrame(step);
+  });
+}
+
+// The hops of one request, in stages: the hops of a stage go at the same time. Each log line is a
+// moment (when it happened, and its place among lines of the same moment); a request through an
+// entry also comes back through it when it ends (start + duration). Calls between services nest.
+// A hop: [from, to, class, label, dashed, kind, service]
+function stages(events) {
+  const moments = [];
+  const add = (t, seq, hops) => moments.push({ t, seq, hops, i: moments.length });
+  // A request straight to a replica is timed by this computer's clock, not the nodes': it opens
+  // and closes the request instead.
+  const firstT = Math.min(...events.map((e) => e.t)), lastT = Math.max(...events.map((e) => e.t + (e.ms || 0)));
+  for (const e of events) {
+    const src = e.from === "client" || !e.from ? "client" : e.from;
+    if (e.kind === "direct") {
+      add(firstT - 1, 0, [["client", e.pod, "info", null, false, null, appOf(e.pod)]]);
+      add(lastT + 1, 11, [[e.pod, "client", codeClass(e.code), String(e.code || "×"), false, null, appOf(e.pod)]]);
+    } else if (e.kind === "entry") {
+      const cls = codeClass(e.code, e.code >= 500 ? e.flags : "-");
+      if (src === "client") {
+        add(e.t, 0, [["client", `vip:${e.svc}`, "info", null, false, null, e.svc]]);
+        add(e.t, 1, [[`vip:${e.svc}`, e.entry, "info", null, false, null, e.svc]]);
+        if (e.up) add(e.t + e.ms, 8, [[e.up, e.entry, cls, null, false, null, e.svc]]);
+        add(e.t + e.ms, 9, [[e.entry, `vip:${e.svc}`, cls, null, false, null, e.svc]]);
+        add(e.t + e.ms, 10, [[`vip:${e.svc}`, "client", cls, String(e.code || "×"), false, null, e.svc]]);
+      } else {
+        add(e.t, 1, [[src, e.entry, "info", null, false, "call", e.svc]]);
+        if (e.up) add(e.t + e.ms, 8, [[e.up, e.entry, cls, null, false, null, e.svc]]);
+        add(e.t + e.ms, 9, [[e.entry, src, cls, String(e.code || "×"), false, "call", e.svc]]);
+      }
+    } else if (e.kind === "attempt") {
+      const failed = !e.code || e.code >= 500 || e.flags !== "-";
+      add(e.t, 2, [[e.entry, e.up, codeClass(e.code, e.flags), failed ? `${e.code || "×"} ${e.flags !== "-" ? e.flags : ""}` : null, false, null, e.svc]]);
+    } else if (e.kind === "peer") {
+      const cls = e.attempt === 0 ? "warn" : codeClass(e.code);
+      add(e.t, 3, [[e.pod, e.peer, cls, e.attempt === 0 ? "skipped" : e.code ? String(e.code) : "×", e.what !== "forward", null, appOf(e.pod)]]);
+    }
+  }
+  moments.sort((a, b) => a.t - b.t || a.seq - b.seq || a.i - b.i);
+  const out = [];
+  let prev = null;
+  for (const m of moments) {
+    // Calls of one replica to its peers within a moment of each other go together
+    if (prev && m.seq === 3 && prev.seq === 3 && m.hops[0][0] === prev.hops[0][0] && m.t - prev.t <= 25) out.at(-1).push(...m.hops);
+    else out.push([...m.hops]);
+    prev = m;
+  }
+  return out;
+}
+
+async function play(events, always) {
+  if (!always && playing.size >= 2) return;
+  const token = Symbol();
+  playing.add(token);
+  try {
+    for (const stage of stages(events)) await Promise.all(stage.map((h) => hop(...h)));
+  } finally {
+    playing.delete(token);
+  }
+}
+
+// --- Lists ------------------------------------------------------------------------------------------
+
+function addRow(list, html, onClick) {
+  const r = document.createElement("div");
+  r.className = "row" + (onClick ? " click" : "");
+  r.innerHTML = html;
+  r.title = r.textContent;   // the whole line, when it does not fit
+  if (onClick) r.addEventListener("click", onClick);
+  const following = list.scrollHeight - list.scrollTop - list.clientHeight < 30;
+  list.append(r);
+  while (list.children.length > 300) list.firstChild.remove();
+  if (following) list.scrollTop = list.scrollHeight;
+}
+
+const esc = (s) => String(s ?? "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+
+function journey(msg) {
+  // The client's request: through an entry, or straight to a replica (then the entries only carry its
+  // calls to other services)
+  const entry = msg.events.find((e) => e.kind === "entry" && e.from === "client")
+             || msg.events.filter((e) => e.kind === "direct").map((e) => ({ ...e, from: "client", up: e.pod,
+                  m: "", p: "straight to " + e.pod }))[0]
+             || msg.events.find((e) => e.kind === "entry");
+  const peers = msg.events.filter((e) => e.kind === "peer");
+  play(msg.events, msg.id.startsWith("demo-"));
+  if (!entry) {
+    if (peers.length) addRow($("requests"), `<span class="t">${hhmmss(peers[0].t)}</span><span class="dim">${esc(peers[0].pod)} → peers: ${esc(peers[0].m)} ${esc(peers[0].p)}</span>`,
+                            () => play(msg.events, true));
+    return;
+  }
+  const cls = codeClass(entry.code);
+  const notes = [];
+  // Its own attempts only: the calls it made to other services go through entries too
+  const attempts = msg.events.filter((e) => e.kind === "attempt" && e.entry === entry.entry && e.svc === entry.svc);
+  if (attempts.length > 1) notes.push(`<span class="warn">${attempts.length} attempts</span>`);
+  const called = [...new Set(msg.events.filter((e) => e.kind === "entry" && e !== entry).map((e) => SHORT[e.svc] || e.svc))];
+  if (called.length) notes.push(`<span class="info">called ${called.join(", ")}</span>`);
+  const fwd = peers.filter((e) => e.what === "forward");
+  if (fwd.length) notes.push(`<span class="info">asked ${new Set(fwd.map((e) => e.peer)).size} peer(s)</span>`);
+  const copies = peers.filter((e) => e.what === "copy");
+  if (copies.length) notes.push(`<span class="info">copied to ${copies.length}</span>`);
+  if (peers.some((e) => !e.code)) notes.push(`<span class="fail">peer not answering</span>`);
+  addRow($("requests"),
+    `<span class="t">${hhmmss(entry.t)}</span><span class="${cls}">${entry.code || "×"}</span> ${esc(entry.m)} ${esc(entry.p)}`
+    + ` <span class="dim">→ ${esc(entry.up || "none")}</span> ${notes.join(" ")}`,
+    () => play(msg.events, true));
+}
+
+function feed(msg) {
+  const cls = { fail: "fail", ok: "ok", vip: "vipc", vigia: "warn", pod: "info" }[msg.kind] || "dim";
+  addRow($("feed"), `<span class="t">${hhmmss(msg.t)}</span><span class="${cls}">${esc(msg.text)}</span>`);
+  // The vigia turning a machine on: from the vigia that acts, through the Proxmox API, to the machine
+  const on = msg.kind === "vigia" && /vigia: (\S+) was off: turned on/.exec(msg.text);
+  const leader = on && state && Object.keys(pos).find((n) => pos[n].app === "vigia" && state.vigia && state.vigia.startsWith(n));
+  if (leader && Date.now() - msg.t < 10000)
+    hop(leader, "api", "warn").then(() => hop("api", `vm:${on[1]}`, "warn", "power on"));
+}
+
+function showCounters() {
+  $("c-ok").textContent = counters.ok;
+  $("c-4xx").textContent = counters["4xx"];
+  $("c-retry").textContent = counters.retry;
+  $("c-fail").textContent = counters.fail;
+}
+
+// --- Talking to the server ----------------------------------------------------------------------------
+
+async function act(body) {
+  try {
+    const r = await (await fetch("/", { method: "POST", body: JSON.stringify(body) })).json();
+    if (!["read", "create", "delete", "list", "route", "compatible", "schedule", "flights", "login"].includes(body.op))
+      feed({ kind: r.ok ? "pod" : "fail", t: Date.now(), text: r.text });
+    return r;
+  } catch (e) {
+    feed({ kind: "fail", t: Date.now(), text: "dashboard server not answering" });
+  }
+}
+
+$("send").addEventListener("click", () => act({ op: $("op").value, target: $("target").value }));
+$("traffic").addEventListener("click", (ev) => {
+  const on = !ev.target.classList.contains("on");
+  ev.target.classList.toggle("on", on);
+  act({ op: "traffic", on });
+});
+document.querySelectorAll("[data-restart]").forEach((b) =>
+  b.addEventListener("click", () => act({ op: "restart", svc: b.dataset.restart })));
+$("reset").addEventListener("click", () => { for (const k in counters) counters[k] = 0; showCounters(); });
+
+const events = new EventSource("/events");
+events.onmessage = (m) => {
+  const msg = JSON.parse(m.data);
+  if (msg.type === "state") { state = msg; $("status").textContent = ""; draw(); }
+  else if (msg.type === "status") $("status").textContent = msg.text;
+  else if (msg.type === "journey") journey(msg);
+  else if (msg.type === "feed") feed(msg);
+  else if (msg.type === "circuit") {
+    if (msg.open) circuits[`${msg.from}|${msg.to}`] = Date.now() + msg.ms;
+    else delete circuits[`${msg.from}|${msg.to}`];
+    if (state) draw();
+  }
+  else if (msg.type === "background" && $("bg").checked && msg.kind === "peer" && playing.size < 2)
+    hop(msg.pod, msg.peer, msg.code ? "info" : "fail", null, true);
+  else if (msg.type === "sent") {
+    const c = msg.code;
+    counters[c >= 200 && c < 300 ? "ok" : c >= 400 && c < 500 ? "4xx" : msg.retry ? "retry" : "fail"]++;
+    showCounters();
+    if (!c) addRow($("requests"), `<span class="t">${hhmmss(msg.t)}</span><span class="fail">no answer</span> ${esc(msg.op)} via ${esc(msg.via)}: ${esc(msg.error)}`);
+  }
+};
+events.onerror = () => { $("status").textContent = "dashboard server not answering"; };
+</script>
+</body>
+</html>
