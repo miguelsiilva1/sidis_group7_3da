@@ -1,0 +1,24 @@
+@startuml sd_us108
+skinparam backgroundColor #FFFFFF
+title US108 - Sequence Diagram
+autonumber
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 260
+actor "ATCC" as Actor
+participant "Entry (Envoy)\nvirtual IP of airports-routes" as EAR
+box "airports-routes-n (the replica that answers)" #F7F7F7
+participant "AirportController" as AirportController
+participant "SearchAirportUseCase" as SearchAirportUseCase
+database "own database" as DBAR
+end box
+collections "peer replicas\nairports-routes-m" as PAR
+== GET /api/airports/search ==
+Actor -> EAR : GET /api/airports/search\n(HTTPS, Authorization: Bearer JWT)
+EAR -> AirportController : to a ready replica\n(another one if it fails)
+AirportController -> SearchAirportUseCase : execute(...)
+SearchAirportUseCase -> DBAR : read airports
+note right of DBAR : catalog: complete on every replica
+DBAR --> SearchAirportUseCase : data
+SearchAirportUseCase --> AirportController : result
+AirportController --> Actor : 200 OK (X-Node-Id)
+@enduml

@@ -1,0 +1,64 @@
+@startuml sd_us103
+skinparam backgroundColor #FFFFFF
+title US103 - Sequence Diagram
+autonumber
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 260
+actor "Backoffice Operator" as Actor
+participant "Entry (Envoy)\nvirtual IP of aircraft-maintenance" as EAM
+box "aircraft-maintenance-n (the replica that answers)" #F7F7F7
+participant "AircraftController" as AircraftController
+participant "AircraftModelController" as AircraftModelController
+participant "ViewAircraftDetailsUseCase" as ViewAircraftDetailsUseCase
+participant "ListAircraftUseCase" as ListAircraftUseCase
+participant "ViewAircraftModelDetailsUseCase" as ViewAircraftModelDetailsUseCase
+participant "ListAircraftModelsUseCase" as ListAircraftModelsUseCase
+database "own database" as DBAM
+end box
+collections "peer replicas\naircraft-maintenance-m" as PAM
+== GET /api/aircrafts/{registration} ==
+Actor -> EAM : GET /api/aircrafts/{registration}\n(HTTPS, Authorization: Bearer JWT)
+EAM -> AircraftController : to a ready replica\n(another one if it fails)
+AircraftController -> ViewAircraftDetailsUseCase : execute(...)
+ViewAircraftDetailsUseCase -> DBAM : find aircraft
+alt held by this replica
+DBAM --> ViewAircraftDetailsUseCase : aircraft
+ViewAircraftDetailsUseCase --> AircraftController : result
+AircraftController --> Actor : 200 OK (X-Node-Id)
+else not held here (NotFoundException)
+DBAM --> ViewAircraftDetailsUseCase : nothing
+ViewAircraftDetailsUseCase --> AircraftController : NotFoundException
+AircraftController -> PAM : same GET, X-Peer-Forwarded\n(every peer in parallel; 0.5 s to connect, 2 s to answer, one retry, circuit breaker)
+PAM --> AircraftController : 200 from the first peer that holds it
+AircraftController --> Actor : 200 OK (X-Node-Id, X-Data-Node)
+note over AircraftController, PAM : 404 only if every peer answered without it;\n503 with Retry-After if a peer could not be asked
+end
+== GET /api/aircrafts ==
+Actor -> EAM : GET /api/aircrafts\n(HTTPS, Authorization: Bearer JWT)
+EAM -> AircraftController : to a ready replica\n(another one if it fails)
+AircraftController -> ListAircraftUseCase : execute(...)
+ListAircraftUseCase -> DBAM : own aircraft
+ListAircraftUseCase -> PAM : GET /internal/replicas/aircrafts\n(every peer in parallel)
+PAM --> ListAircraftUseCase : their aircraft
+ListAircraftUseCase -> ListAircraftUseCase : keep the latest change of each record,\nleave out deleted ones; filter, compute, sort, page
+ListAircraftUseCase --> AircraftController : result
+AircraftController --> Actor : 200 OK (X-Node-Id; X-Partial-Result if both holders of a record were unreachable)
+== GET /api/aircraftModels/{modelName} ==
+Actor -> EAM : GET /api/aircraftModels/{modelName}\n(HTTPS, Authorization: Bearer JWT)
+EAM -> AircraftModelController : to a ready replica\n(another one if it fails)
+AircraftModelController -> ViewAircraftModelDetailsUseCase : execute(...)
+ViewAircraftModelDetailsUseCase -> DBAM : read aircraft models
+note right of DBAM : catalog: complete on every replica
+DBAM --> ViewAircraftModelDetailsUseCase : data
+ViewAircraftModelDetailsUseCase --> AircraftModelController : result
+AircraftModelController --> Actor : 200 OK (X-Node-Id)
+== GET /api/aircraftModels ==
+Actor -> EAM : GET /api/aircraftModels\n(HTTPS, Authorization: Bearer JWT)
+EAM -> AircraftModelController : to a ready replica\n(another one if it fails)
+AircraftModelController -> ListAircraftModelsUseCase : execute(...)
+ListAircraftModelsUseCase -> DBAM : read aircraft models
+note right of DBAM : catalog: complete on every replica
+DBAM --> ListAircraftModelsUseCase : data
+ListAircraftModelsUseCase --> AircraftModelController : result
+AircraftModelController --> Actor : 200 OK (X-Node-Id)
+@enduml

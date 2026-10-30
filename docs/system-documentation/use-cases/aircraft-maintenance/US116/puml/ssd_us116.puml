@@ -1,0 +1,11 @@
+@startuml ssd_us116
+skinparam backgroundColor #FFFFFF
+title US116 - System Sequence Diagram
+autonumber
+actor "Maintenance Technician" as Actor
+participant "AISafe\naircraft-maintenance\n(virtual IP 192.168.124.25, HTTPS)" as AM
+Actor -> AM : GET /api/maintenance/records/aircraft/{registration}
+activate AM
+AM --> Actor : 200 OK
+deactivate AM
+@enduml

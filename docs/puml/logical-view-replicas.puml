@@ -1,0 +1,96 @@
+@startuml logical-view-replicas
+skinparam backgroundColor #FFFFFF
+title AISafe - Logical view with the replicas (UML components, level 1)
+
+skinparam componentStyle uml2
+skinparam shadowing false
+skinparam defaultFontSize 14
+left to right direction
+
+actor "Client" as client
+component "Entry (Envoy)\none per machine" as entry
+
+package "flight-ops" {
+  interface "Flights API\n/api/flights" as foApi
+  component "flight-ops-0" <<instance>> as fo0
+  component "flight-ops-1" <<instance>> as fo1
+  component "flight-ops-2" <<instance>> as fo2
+  interface "Peer API\n/internal/replicas/**" as foPeer
+}
+
+package "airports-routes" {
+  interface "Airports & Routes API\n/api/airports, /api/routes, /api/network" as arApi
+  interface "Routes internal\nC2, C5" as arInternal
+  component "airports-routes-0" <<instance>> as ar0
+  component "airports-routes-1" <<instance>> as ar1
+  component "airports-routes-2" <<instance>> as ar2
+  interface "Peer API\n/internal/replicas/**" as arPeer
+}
+
+package "aircraft-maintenance" {
+  interface "Aircraft & Maintenance API\n/api/aircrafts, /api/aircraftModels, /api/maintenance" as amApi
+  interface "Aircraft internal\nC1, C3, C4" as amInternal
+  component "aircraft-maintenance-0" <<instance>> as am0
+  component "aircraft-maintenance-1" <<instance>> as am1
+  component "aircraft-maintenance-2" <<instance>> as am2
+  interface "Peer API\n/internal/replicas/**" as amPeer
+}
+
+package "login" {
+  interface "Auth API\n/api/auth" as authApi
+  component "login-0" <<instance>> as l0
+  component "login-1" <<instance>> as l1
+  component "login-2" <<instance>> as l2
+}
+
+client ..> entry : HTTPS + JWT
+entry ..> foApi : HTTP/JSON\n(a ready instance)
+entry ..> arApi : HTTP/JSON
+entry ..> amApi : HTTP/JSON
+entry ..> authApi : HTTP/JSON
+
+foApi -- fo0
+foApi -- fo1
+foApi -- fo2
+foPeer -- fo0
+foPeer -- fo1
+foPeer -- fo2
+fo0 ..> foPeer : HTTP/JSON: forwarded requests\n(X-Peer-Forwarded), copies, sync
+fo0 ..> arInternal : HTTP/JSON, JWT\n(C2, C5, through the entry)
+fo0 ..> amInternal : HTTP/JSON, JWT\n(C1, C4, through the entry)
+
+arApi -- ar0
+arApi -- ar1
+arApi -- ar2
+arInternal -- ar0
+arInternal -- ar1
+arInternal -- ar2
+arPeer -- ar0
+arPeer -- ar1
+arPeer -- ar2
+ar0 ..> arPeer : HTTP/JSON: forwarded requests,\ncopies, sync
+ar0 ..> amInternal : HTTP/JSON, JWT\n(C1, C3, through the entry)
+
+amApi -- am0
+amApi -- am1
+amApi -- am2
+amInternal -- am0
+amInternal -- am1
+amInternal -- am2
+amPeer -- am0
+amPeer -- am1
+amPeer -- am2
+am0 ..> amPeer : HTTP/JSON: forwarded requests,\ncopies, sync
+
+authApi -- l0
+authApi -- l1
+authApi -- l2
+
+note as N
+  Every instance has its own database.
+  Only instance -0 is drawn requiring the
+  peer and internal interfaces; -1 and -2
+  require them in the same way. The logins
+  also copy the accounts among themselves.
+end note
+@enduml

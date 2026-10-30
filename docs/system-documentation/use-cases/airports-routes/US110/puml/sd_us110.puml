@@ -1,0 +1,31 @@
+@startuml sd_us110
+skinparam backgroundColor #FFFFFF
+title US110 - Sequence Diagram
+autonumber
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 260
+actor "ATCC" as Actor
+participant "Entry (Envoy)\nvirtual IP of airports-routes" as EAR
+box "airports-routes-n (the replica that answers)" #F7F7F7
+participant "RouteController" as RouteController
+participant "CreateRouteUseCase" as CreateRouteUseCase
+database "own database" as DBAR
+participant "Outbox dispatcher" as OBAR
+end box
+collections "peer replicas\nairports-routes-m" as PAR
+== POST /api/routes ==
+Actor -> EAR : POST /api/routes\n(HTTPS, Authorization: Bearer JWT)
+EAR -> RouteController : to a ready replica\n(another one if it fails)
+RouteController -> CreateRouteUseCase : execute(...)
+CreateRouteUseCase -> DBAR : origin and destination already here?
+opt not found here
+CreateRouteUseCase -> PAR : GET /internal/routes/{origin}/{destination}\n(asks the peers)
+PAR --> CreateRouteUseCase : 200 / 404
+end
+CreateRouteUseCase -> DBAR : airports (catalog, complete here)
+CreateRouteUseCase -> DBAR : save route + copy for the next replica in the outbox\n(same transaction)
+CreateRouteUseCase --> RouteController : created
+RouteController --> Actor : 201 Created
+OBAR -> PAR : PUT /internal/replicas/routes\n(to the next replica in the ring, retried until delivered)
+PAR --> OBAR : 200 (applied if newer)
+@enduml

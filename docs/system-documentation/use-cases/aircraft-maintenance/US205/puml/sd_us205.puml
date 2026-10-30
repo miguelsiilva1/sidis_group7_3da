@@ -1,0 +1,25 @@
+@startuml sd_us205
+skinparam backgroundColor #FFFFFF
+title US205 - Sequence Diagram
+autonumber
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 260
+actor "Backoffice Operator" as Actor
+participant "Entry (Envoy)\nvirtual IP of aircraft-maintenance" as EAM
+box "aircraft-maintenance-n (the replica that answers)" #F7F7F7
+participant "AircraftController" as AircraftController
+participant "ViewFleetStatusUseCase" as ViewFleetStatusUseCase
+database "own database" as DBAM
+end box
+collections "peer replicas\naircraft-maintenance-m" as PAM
+== GET /api/aircrafts/fleet-status ==
+Actor -> EAM : GET /api/aircrafts/fleet-status\n(HTTPS, Authorization: Bearer JWT)
+EAM -> AircraftController : to a ready replica\n(another one if it fails)
+AircraftController -> ViewFleetStatusUseCase : execute(...)
+ViewFleetStatusUseCase -> DBAM : own aircraft
+ViewFleetStatusUseCase -> PAM : GET /internal/replicas/aircrafts\n(every peer in parallel)
+PAM --> ViewFleetStatusUseCase : their aircraft
+ViewFleetStatusUseCase -> ViewFleetStatusUseCase : keep the latest change of each record,\nleave out deleted ones; filter, compute, sort, page
+ViewFleetStatusUseCase --> AircraftController : result
+AircraftController --> Actor : 200 OK (X-Node-Id; X-Partial-Result if both holders of a record were unreachable)
+@enduml

@@ -1,11 +1,13 @@
 # US229 - Generate flight utilization reports
 
 ## 1. Description
+
 As a Backoffice Operator, I want to generate flight utilization reports showing which routes are most frequently flown so that I can optimize the network based on demand.
 
 This is a bonus use case.
 
 ### 1.1 Acceptance Criteria
+
 - GET endpoint `/api/flights/reports/utilization` with optional `startDate` and `endDate`.
 - Report includes: `routeId`, `origin`, `destination`, and count of completed flights.
 - Results sorted by frequency (descending).
@@ -16,9 +18,11 @@ This is a bonus use case.
 ## 2. Design
 
 ### 2.1 System Sequence Diagram (SSD)
+
 ![SSD US229](svg/ssd_us229.svg)
 
 ### 2.2 Sequence Diagram (SD)
+
 ![SD US229](svg/sd_us229.svg)
 
 ## 3. Implementation details

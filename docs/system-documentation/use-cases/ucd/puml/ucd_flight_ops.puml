@@ -1,0 +1,19 @@
+@startuml ucd_flight_ops
+skinparam backgroundColor #FFFFFF
+title Use cases of flight-ops
+left to right direction
+skinparam packageStyle rectangle
+skinparam actorStyle awesome
+actor "ATCC" as ATCC
+actor "Backoffice Operator" as BACKOFFICE_OPERATOR
+rectangle "flight-ops (3 replicas, behind its virtual IP)" {
+  usecase "US212\nAssign Aircraft to Route (Scheduled Flight)" as US212
+  usecase "US213\nView Scheduled Flights by Aircraft" as US213
+  usecase "US225\nImport Bulk Data (CSV)" as US225
+  usecase "US229\nGenerate flight utilization reports" as US229
+}
+ATCC --> US212
+ATCC --> US213
+BACKOFFICE_OPERATOR --> US225
+BACKOFFICE_OPERATOR --> US229
+@enduml

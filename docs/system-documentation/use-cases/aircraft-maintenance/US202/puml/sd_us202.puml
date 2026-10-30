@@ -1,0 +1,46 @@
+@startuml sd_us202
+skinparam backgroundColor #FFFFFF
+title US202 - Sequence Diagram
+autonumber
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 260
+actor "Backoffice Operator" as Actor
+participant "Entry (Envoy)\nvirtual IP of aircraft-maintenance" as EAM
+box "aircraft-maintenance-n (the replica that answers)" #F7F7F7
+participant "AircraftModelController" as AircraftModelController
+participant "RegisterAircraftModelUseCase" as RegisterAircraftModelUseCase
+participant "UpdateAircraftModelImageUseCase" as UpdateAircraftModelImageUseCase
+participant "GetAircraftModelImageUseCase" as GetAircraftModelImageUseCase
+database "own database" as DBAM
+participant "Outbox dispatcher" as OBAM
+end box
+collections "peer replicas\naircraft-maintenance-m" as PAM
+== POST /api/aircraftModels ==
+Actor -> EAM : POST /api/aircraftModels\n(HTTPS, Authorization: Bearer JWT)
+EAM -> AircraftModelController : to a ready replica\n(another one if it fails)
+AircraftModelController -> RegisterAircraftModelUseCase : execute(...)
+RegisterAircraftModelUseCase -> DBAM : model name already in the catalog?
+RegisterAircraftModelUseCase -> DBAM : save aircraft model + one copy per other replica in the outbox\n(same transaction)
+RegisterAircraftModelUseCase --> AircraftModelController : created
+AircraftModelController --> Actor : 201 Created
+OBAM -> PAM : PUT /internal/replicas/aircraft-models\n(to every other replica, retried until delivered)
+PAM --> OBAM : 200 (applied if newer)
+== PATCH /api/aircraftModels/{modelName}/image ==
+Actor -> EAM : PATCH /api/aircraftModels/{modelName}/image\n(HTTPS, Authorization: Bearer JWT)
+EAM -> AircraftModelController : to a ready replica\n(another one if it fails)
+AircraftModelController -> UpdateAircraftModelImageUseCase : execute(...)
+UpdateAircraftModelImageUseCase -> DBAM : apply the change to this replica's copy\n+ one copy per other replica in the outbox (same transaction)
+UpdateAircraftModelImageUseCase --> AircraftModelController : updated
+AircraftModelController --> Actor : 200 OK
+OBAM -> PAM : PUT /internal/replicas/aircraft-models\n(to every other replica; the latest change wins)
+PAM --> OBAM : 200 (applied if newer)
+== GET /api/aircraftModels/{modelName}/image ==
+Actor -> EAM : GET /api/aircraftModels/{modelName}/image\n(HTTPS, Authorization: Bearer JWT)
+EAM -> AircraftModelController : to a ready replica\n(another one if it fails)
+AircraftModelController -> GetAircraftModelImageUseCase : execute(...)
+GetAircraftModelImageUseCase -> DBAM : read aircraft models
+note right of DBAM : catalog: complete on every replica
+DBAM --> GetAircraftModelImageUseCase : data
+GetAircraftModelImageUseCase --> AircraftModelController : result
+AircraftModelController --> Actor : 200 OK (X-Node-Id)
+@enduml

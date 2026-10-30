@@ -1,0 +1,23 @@
+@startuml ssd_us226
+skinparam backgroundColor #FFFFFF
+title US226 - System Sequence Diagram
+autonumber
+actor "Maintenance Technician" as Actor
+participant "AISafe\naircraft-maintenance\n(virtual IP 192.168.124.25, HTTPS)" as AM
+Actor -> AM : POST /api/maintenance/parts
+activate AM
+AM --> Actor : 201 Created
+deactivate AM
+Actor -> AM : PATCH /api/maintenance/parts/{partNumber}
+activate AM
+AM --> Actor : 200 OK
+deactivate AM
+Actor -> AM : DELETE /api/maintenance/parts/{partNumber}
+activate AM
+AM --> Actor : 204 No Content
+deactivate AM
+Actor -> AM : GET /api/maintenance/parts/search
+activate AM
+AM --> Actor : 200 OK
+deactivate AM
+@enduml

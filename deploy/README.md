@@ -18,14 +18,14 @@ deploy/
 
 ## What it builds
 
-| Piece | Where | Why |
-|---|---|---|
-| 3 machines (k3s nodes) | VMs on Proxmox, or existing machines | No single point of failure: any one can be lost |
-| k3s, control plane on the 3 | every node | The cluster keeps being managed with one node down |
-| MetalLB | every node | Virtual IPs that move to another node when theirs is lost |
-| Entry (Envoy) | every node | Sends each request to a ready replica, and tries another when one fails |
-| aircraft-maintenance ×3, airports-routes ×3, flight-ops ×3, login ×3 | one of each per node, each with its own disk | Replication between replicas (see the system documentation) |
-| Vigia | every node, one acting | Turns lost machines back on, isolates those that do not come back, gives replicas back |
+| Piece                                                                | Where                                        | Why                                                                                    |
+| -------------------------------------------------------------------- | -------------------------------------------- | -------------------------------------------------------------------------------------- |
+| 3 machines (k3s nodes)                                               | VMs on Proxmox, or existing machines         | No single point of failure: any one can be lost                                        |
+| k3s, control plane on the 3                                          | every node                                   | The cluster keeps being managed with one node down                                     |
+| MetalLB                                                              | every node                                   | Virtual IPs that move to another node when theirs is lost                              |
+| Entry (Envoy)                                                        | every node                                   | Sends each request to a ready replica, and tries another when one fails                |
+| aircraft-maintenance ×3, airports-routes ×3, flight-ops ×3, login ×3 | one of each per node, each with its own disk | Replication between replicas (see the system documentation)                            |
+| Vigia                                                                | every node, one acting                       | Turns lost machines back on, isolates those that do not come back, gives replicas back |
 
 On Proxmox, the VMs also get a watchdog: a VM whose system freezes is restarted by Proxmox.
 
@@ -52,10 +52,10 @@ On Proxmox, the VMs also get a watchdog: a VM whose system freezes is restarted 
 
 Proxmox does not need to run on its own machine, but the program that runs it must allow two things:
 
-| Requirement | Why | Where |
-|---|---|---|
-| Virtualization inside the VM (Intel VT-x or AMD-V passed to Proxmox) | The cluster's VMs use the host's processor: without it they do not start | VMware: "Virtualize Intel VT-x/EPT or AMD-V/RVI" in the Proxmox VM's processor settings. VirtualBox: "Enable Nested VT-x/AMD-V". libvirt: CPU mode `host-passthrough` |
-| A network that accepts addresses that are not the Proxmox VM's own | The cluster's VMs and the virtual IPs have their own network addresses; if only the Proxmox VM's own is let through, the VMs have no network and the virtual IPs do not answer | VMware ESXi: accept "Promiscuous mode", "MAC address changes" and "Forged transmits" on the port group (Workstation in bridged mode usually works). VirtualBox: "Promiscuous Mode: Allow All" on the adapter |
+| Requirement                                                          | Why                                                                                                                                                                            | Where                                                                                                                                                                                                        |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Virtualization inside the VM (Intel VT-x or AMD-V passed to Proxmox) | The cluster's VMs use the host's processor: without it they do not start                                                                                                       | VMware: "Virtualize Intel VT-x/EPT or AMD-V/RVI" in the Proxmox VM's processor settings. VirtualBox: "Enable Nested VT-x/AMD-V". libvirt: CPU mode `host-passthrough`                                        |
+| A network that accepts addresses that are not the Proxmox VM's own   | The cluster's VMs and the virtual IPs have their own network addresses; if only the Proxmox VM's own is let through, the VMs have no network and the virtual IPs do not answer | VMware ESXi: accept "Promiscuous mode", "MAC address changes" and "Forged transmits" on the port group (Workstation in bridged mode usually works). VirtualBox: "Promiscuous Mode: Allow All" on the adapter |
 
 Putting the VMs on an internal Proxmox bridge, with Proxmox routing it, avoids the second one.
 
@@ -76,33 +76,33 @@ change). It is self-signed, so clients must trust it: `setup.sh` saves it in `de
 (`curl --cacert deploy/entry.crt https://<virtual IP>/...`). Inside the cluster the requests still go
 in plain HTTP (see the limitations in the system documentation).
 
-| Stage | Command | What it does |
-|---|---|---|
-| machines | `deploy/setup.sh machines` | Creates or updates the VMs on Proxmox (nothing with `MACHINES=existing`) |
-| cluster | `deploy/setup.sh cluster` | Prepares the nodes, installs k3s one node at a time, and MetalLB |
-| app | `deploy/setup.sh app` | Deploys the services, the logins and the entries; also after a code change |
-| vigia | `deploy/setup.sh vigia` | Deploys the vigia and gives it access to the machines |
-| check | `deploy/setup.sh check` | Waits until everything is normal and tries the services |
+| Stage    | Command                    | What it does                                                               |
+| -------- | -------------------------- | -------------------------------------------------------------------------- |
+| machines | `deploy/setup.sh machines` | Creates or updates the VMs on Proxmox (nothing with `MACHINES=existing`)   |
+| cluster  | `deploy/setup.sh cluster`  | Prepares the nodes, installs k3s one node at a time, and MetalLB           |
+| app      | `deploy/setup.sh app`      | Deploys the services, the logins and the entries; also after a code change |
+| vigia    | `deploy/setup.sh vigia`    | Deploys the vigia and gives it access to the machines                      |
+| check    | `deploy/setup.sh check`    | Waits until everything is normal and tries the services                    |
 
 ## Images of the services
 
-| `IMAGES` | Where they are built | When to use |
-|---|---|---|
+| `IMAGES`         | Where they are built                                                                                | When to use                                                                          |
+| ---------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
 | `ghcr` (default) | GitHub Actions, at every push (`.github/workflows/images.yml`), published in `ghcr.io/<repository>` | Normal use: nobody needs Java to deploy, and a new node fetches the images by itself |
-| `local` | Here (needs Java 25), then copied to every node | Testing changes not pushed yet |
+| `local`          | Here (needs Java 25), then copied to every node                                                     | Testing changes not pushed yet                                                       |
 
 With `ghcr`, `IMAGE_TAG` is a branch (its latest commit on GitHub) or a commit. The images must be
 public (package settings on GitHub).
 
 ## The vigia
 
-| The machine is… | The vigia… |
-|---|---|
-| off | marks the node (its replicas leave the traffic and wait for it) and turns it on |
+| The machine is…                                      | The vigia…                                                                                                    |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| off                                                  | marks the node (its replicas leave the traffic and wait for it) and turns it on                               |
 | down for `REVIVE_TIMEOUT` seconds, certainly stopped | isolates the node: its replicas are reborn on the other nodes, empty, and recover their data from their peers |
-| back and ready | removes the marks, and gives the replicas back one at a time |
-| on but not answering (network cut) | nothing: its replicas may be alive |
-| tagged `maintenance` in Proxmox | does not turn it on, and isolates it as soon as it is off |
+| back and ready                                       | removes the marks, and gives the replicas back one at a time                                                  |
+| on but not answering (network cut)                   | nothing: its replicas may be alive                                                                            |
+| tagged `maintenance` in Proxmox                      | does not turn it on, and isolates it as soon as it is off                                                     |
 
 It asks the machines through a driver. On Proxmox it uses the API, with a token that can only see
 and turn on or off the cluster's VMs; port 8006 of Proxmox must be open from the nodes. With
@@ -170,6 +170,7 @@ kubectl -n aisafe exec aircraft-maintenance-0 -- tail -n 20 /data/audit.log
 kubectl -n aisafe exec flight-ops-1 -- grep '"status":403' /data/audit.log    # refused requests
 ```
 
+<!-- prettier-ignore -->
 ```json
 {"time":"2026-10-26T15:40:02.114Z","user":"atcc","roles":["ATCC"],"method":"POST","path":"/api/flights","status":201,"node":"flight-ops-1","correlationId":"9c2e…","forwardedBy":null,"ms":184}
 ```
@@ -178,11 +179,11 @@ kubectl -n aisafe exec flight-ops-1 -- grep '"status":403' /data/audit.log    # 
 
 The script stops at the first error and says where. After fixing it, run it again.
 
-| Symptom | Likely cause | Check |
-|---|---|---|
-| "does not answer by SSH" | The VM did not start, or did not get its IP | Proxmox console of the VM; `qm cloudinit dump <id> network` |
-| k3s fails to download | No internet or DNS on the node | `ping` the gateway and `getent hosts get.k3s.io` on the node |
-| "No public image" | GitHub Actions did not build that commit yet, or the package is private | The Images workflow on GitHub; the package settings |
-| "cannot reach the Proxmox API" | A firewall between the nodes and Proxmox | `curl -k https://<PROXMOX_API_IP>:8006` from a node |
-| Replicas stay `Pending` | Not enough memory on a node | `kubectl -n aisafe describe pod <pod>` |
-| A machine that was off is not turned on | The vigia is not running, or the VM is tagged `maintenance` | `kubectl -n aisafe-vigia logs -l app=vigia` |
+| Symptom                                 | Likely cause                                                            | Check                                                        |
+| --------------------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------ |
+| "does not answer by SSH"                | The VM did not start, or did not get its IP                             | Proxmox console of the VM; `qm cloudinit dump <id> network`  |
+| k3s fails to download                   | No internet or DNS on the node                                          | `ping` the gateway and `getent hosts get.k3s.io` on the node |
+| "No public image"                       | GitHub Actions did not build that commit yet, or the package is private | The Images workflow on GitHub; the package settings          |
+| "cannot reach the Proxmox API"          | A firewall between the nodes and Proxmox                                | `curl -k https://<PROXMOX_API_IP>:8006` from a node          |
+| Replicas stay `Pending`                 | Not enough memory on a node                                             | `kubectl -n aisafe describe pod <pod>`                       |
+| A machine that was off is not turned on | The vigia is not running, or the VM is tagged `maintenance`             | `kubectl -n aisafe-vigia logs -l app=vigia`                  |

@@ -28,10 +28,10 @@
 
 ## Alternative / Exception Flows
 
-| Step | Condition                         | System Response |
-| ---- | --------------------------------- | --------------- |
-| 1    | Missing aircraftId parameter      | HTTP 400 Bad Request |
-| 2    | No flights found for aircraft     | HTTP 200 OK (Empty List) |
+| Step | Condition                     | System Response          |
+| ---- | ----------------------------- | ------------------------ |
+| 1    | Missing aircraftId parameter  | HTTP 400 Bad Request     |
+| 2    | No flights found for aircraft | HTTP 200 OK (Empty List) |
 
 ## Design Justification
 

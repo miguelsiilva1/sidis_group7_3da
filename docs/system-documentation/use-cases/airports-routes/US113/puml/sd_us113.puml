@@ -1,0 +1,44 @@
+@startuml sd_us113
+skinparam backgroundColor #FFFFFF
+title US113 - Sequence Diagram
+autonumber
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 260
+actor "ATCC" as Actor
+participant "Entry (Envoy)\nvirtual IP of airports-routes" as EAR
+box "airports-routes-n (the replica that answers)" #F7F7F7
+participant "RouteController" as RouteController
+participant "ListRoutesFromAirportUseCase" as ListRoutesFromAirportUseCase
+participant "ViewRouteDetailsUseCase" as ViewRouteDetailsUseCase
+database "own database" as DBAR
+end box
+collections "peer replicas\nairports-routes-m" as PAR
+== GET /api/routes/airport/{iataCode} ==
+Actor -> EAR : GET /api/routes/airport/{iataCode}\n(HTTPS, Authorization: Bearer JWT)
+EAR -> RouteController : to a ready replica\n(another one if it fails)
+RouteController -> ListRoutesFromAirportUseCase : execute(...)
+ListRoutesFromAirportUseCase -> DBAR : own routes
+ListRoutesFromAirportUseCase -> PAR : GET /internal/replicas/routes\n(every peer in parallel)
+PAR --> ListRoutesFromAirportUseCase : their routes
+ListRoutesFromAirportUseCase -> DBAR : airports (catalog, complete here)
+ListRoutesFromAirportUseCase -> ListRoutesFromAirportUseCase : keep the latest change of each record,\nleave out deleted ones; filter, compute, sort, page
+ListRoutesFromAirportUseCase --> RouteController : result
+RouteController --> Actor : 200 OK (X-Node-Id; X-Partial-Result if both holders of a record were unreachable)
+== GET /api/routes/{origin}/{destination} ==
+Actor -> EAR : GET /api/routes/{origin}/{destination}\n(HTTPS, Authorization: Bearer JWT)
+EAR -> RouteController : to a ready replica\n(another one if it fails)
+RouteController -> ViewRouteDetailsUseCase : execute(...)
+ViewRouteDetailsUseCase -> DBAR : find route
+alt held by this replica
+DBAR --> ViewRouteDetailsUseCase : route
+ViewRouteDetailsUseCase --> RouteController : result
+RouteController --> Actor : 200 OK (X-Node-Id)
+else not held here (NotFoundException)
+DBAR --> ViewRouteDetailsUseCase : nothing
+ViewRouteDetailsUseCase --> RouteController : NotFoundException
+RouteController -> PAR : same GET, X-Peer-Forwarded\n(every peer in parallel; 0.5 s to connect, 2 s to answer, one retry, circuit breaker)
+PAR --> RouteController : 200 from the first peer that holds it
+RouteController --> Actor : 200 OK (X-Node-Id, X-Data-Node)
+note over RouteController, PAR : 404 only if every peer answered without it;\n503 with Retry-After if a peer could not be asked
+end
+@enduml

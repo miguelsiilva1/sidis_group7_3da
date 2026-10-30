@@ -1,0 +1,26 @@
+@startuml sd_us101
+skinparam backgroundColor #FFFFFF
+title US101 - Sequence Diagram
+autonumber
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 260
+actor "Backoffice Operator" as Actor
+participant "Entry (Envoy)\nvirtual IP of aircraft-maintenance" as EAM
+box "aircraft-maintenance-n (the replica that answers)" #F7F7F7
+participant "AircraftModelController" as AircraftModelController
+participant "RegisterAircraftModelUseCase" as RegisterAircraftModelUseCase
+database "own database" as DBAM
+participant "Outbox dispatcher" as OBAM
+end box
+collections "peer replicas\naircraft-maintenance-m" as PAM
+== POST /api/aircraftModels ==
+Actor -> EAM : POST /api/aircraftModels\n(HTTPS, Authorization: Bearer JWT)
+EAM -> AircraftModelController : to a ready replica\n(another one if it fails)
+AircraftModelController -> RegisterAircraftModelUseCase : execute(...)
+RegisterAircraftModelUseCase -> DBAM : model name already in the catalog?
+RegisterAircraftModelUseCase -> DBAM : save aircraft model + one copy per other replica in the outbox\n(same transaction)
+RegisterAircraftModelUseCase --> AircraftModelController : created
+AircraftModelController --> Actor : 201 Created
+OBAM -> PAM : PUT /internal/replicas/aircraft-models\n(to every other replica, retried until delivered)
+PAM --> OBAM : 200 (applied if newer)
+@enduml

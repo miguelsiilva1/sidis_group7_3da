@@ -3,14 +3,14 @@
 The login of AISafe: accounts, passwords and the JWT that every other service accepts. One login runs
 on each VM, each with its own database holding every account.
 
-| | |
-|---|---|
-| Code | [`login/`](../../login) (package `security`) |
-| Port | 8085 (each replica) |
-| Entry | virtual IP of the login (`VIP_LOGIN` in `deploy/config.sh`), through the Envoy entry of each node |
-| API documentation | `/swagger-ui.html` and `/v3/api-docs` of any login |
-| Depends on | nothing |
-| Used by | clients only: the services check the JWT themselves |
+|                   |                                                                                                   |
+| ----------------- | ------------------------------------------------------------------------------------------------- |
+| Code              | [`login/`](../../login) (package `security`)                                                      |
+| Port              | 8085 (each replica)                                                                               |
+| Entry             | virtual IP of the login (`VIP_LOGIN` in `deploy/config.sh`), through the Envoy entry of each node |
+| API documentation | `/swagger-ui.html` and `/v3/api-docs` of any login                                                |
+| Depends on        | nothing                                                                                           |
+| Used by           | clients only: the services check the JWT themselves                                               |
 
 ## 1. Logical view
 
@@ -20,13 +20,13 @@ on each VM, each with its own database holding every account.
 
 ![Components](svg/components.svg)
 
-| Component | What it does |
-|---|---|
-| `AuthController`, `AuthenticateUserUseCase` | `POST /api/auth/login`: checks the password (BCrypt) and returns a JWT |
-| `RegisterUserUseCase` | `POST /api/auth/register` (Admin): creates an account |
-| `JwtService` | Signs the token: username, role, expiry (HMAC-SHA, secret from the k3s Secret `aisafe-jwt`) |
+| Component                                                       | What it does                                                                                                |
+| --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `AuthController`, `AuthenticateUserUseCase`                     | `POST /api/auth/login`: checks the password (BCrypt) and returns a JWT                                      |
+| `RegisterUserUseCase`                                           | `POST /api/auth/register` (Admin): creates an account                                                       |
+| `JwtService`                                                    | Signs the token: username, role, expiry (HMAC-SHA, secret from the k3s Secret `aisafe-jwt`)                 |
 | `AccountsOnPeers` (`PeerAccounts`), `AccountInternalController` | An account not copied here yet is asked to the other logins (`/internal/accounts/{username}`, role SERVICE) |
-| `UserReplicaHandler` + `Replicator`, `ReplicaSync` (`common`) | Copies every account to every login |
+| `UserReplicaHandler` + `Replicator`, `ReplicaSync` (`common`)   | Copies every account to every login                                                                         |
 
 ## 3. Domain model
 
@@ -34,8 +34,8 @@ on each VM, each with its own database holding every account.
 
 ## 4. Where the data lives
 
-| Data | Kept by | Why |
-|---|---|---|
+| Data                       | Kept by                   | Why                                                                 |
+| -------------------------- | ------------------------- | ------------------------------------------------------------------- |
 | Accounts (password hashes) | **every login** (catalog) | Any login must be able to log anyone in, with the other logins down |
 
 ## 5. Scenario: logging in with an account created on another login
@@ -44,11 +44,11 @@ on each VM, each with its own database holding every account.
 
 ## 6. Failures
 
-| Failure | Behaviour |
-|---|---|
-| One login down | The others answer through the login virtual IP; tokens already issued keep working |
-| Every login down | No new logins; tokens already issued keep working until they expire |
-| A login restarts or is reborn empty | Recovers every account from the other logins before reporting ready |
+| Failure                             | Behaviour                                                                          |
+| ----------------------------------- | ---------------------------------------------------------------------------------- |
+| One login down                      | The others answer through the login virtual IP; tokens already issued keep working |
+| Every login down                    | No new logins; tokens already issued keep working until they expire                |
+| A login restarts or is reborn empty | Recovers every account from the other logins before reporting ready                |
 
 ## 7. Security
 

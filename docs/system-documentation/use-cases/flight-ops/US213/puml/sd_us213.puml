@@ -1,0 +1,28 @@
+@startuml sd_us213
+skinparam backgroundColor #FFFFFF
+title US213 - Sequence Diagram
+autonumber
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 260
+actor "ATCC" as Actor
+participant "Entry (Envoy)\nvirtual IP of flight-ops" as EFO
+box "flight-ops-n (the replica that answers)" #F7F7F7
+participant "FlightController" as FlightController
+participant "ViewScheduledFlightsByAircraftUseCase" as ViewScheduledFlightsByAircraftUseCase
+database "own database" as DBFO
+end box
+collections "peer replicas\nflight-ops-m" as PFO
+participant "aircraft-maintenance\n(through aircraft-maintenance-local)" as OAM
+== GET /api/flights?aircraftId={registration} ==
+Actor -> EFO : GET /api/flights?aircraftId={registration}\n(HTTPS, Authorization: Bearer JWT)
+EFO -> FlightController : to a ready replica\n(another one if it fails)
+FlightController -> ViewScheduledFlightsByAircraftUseCase : execute(...)
+ViewScheduledFlightsByAircraftUseCase -> OAM : C1: GET /internal/aircrafts/{registration}\n(the actor's token)
+OAM --> ViewScheduledFlightsByAircraftUseCase : 200 the aircraft: status, model, seats, range, fuel consumption
+ViewScheduledFlightsByAircraftUseCase -> DBFO : own flights
+ViewScheduledFlightsByAircraftUseCase -> PFO : GET /internal/replicas/flights\n(every peer in parallel)
+PFO --> ViewScheduledFlightsByAircraftUseCase : their flights
+ViewScheduledFlightsByAircraftUseCase -> ViewScheduledFlightsByAircraftUseCase : keep the latest change of each record,\nleave out deleted ones; filter, compute, sort, page
+ViewScheduledFlightsByAircraftUseCase --> FlightController : result
+FlightController --> Actor : 200 OK (X-Node-Id; X-Partial-Result if both holders of a record were unreachable)
+@enduml

@@ -1,0 +1,25 @@
+@startuml sd_us201
+skinparam backgroundColor #FFFFFF
+title US201 - Sequence Diagram
+autonumber
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 260
+actor "Backoffice Operator" as Actor
+participant "Entry (Envoy)\nvirtual IP of aircraft-maintenance" as EAM
+box "aircraft-maintenance-n (the replica that answers)" #F7F7F7
+participant "AircraftModelController" as AircraftModelController
+participant "UpdateAircraftModelUseCase" as UpdateAircraftModelUseCase
+database "own database" as DBAM
+participant "Outbox dispatcher" as OBAM
+end box
+collections "peer replicas\naircraft-maintenance-m" as PAM
+== PATCH /api/aircraftModels/{modelName} ==
+Actor -> EAM : PATCH /api/aircraftModels/{modelName}\n(HTTPS, Authorization: Bearer JWT)
+EAM -> AircraftModelController : to a ready replica\n(another one if it fails)
+AircraftModelController -> UpdateAircraftModelUseCase : execute(...)
+UpdateAircraftModelUseCase -> DBAM : apply the change to this replica's copy\n+ one copy per other replica in the outbox (same transaction)
+UpdateAircraftModelUseCase --> AircraftModelController : updated
+AircraftModelController --> Actor : 200 OK
+OBAM -> PAM : PUT /internal/replicas/aircraft-models\n(to every other replica; the latest change wins)
+PAM --> OBAM : 200 (applied if newer)
+@enduml

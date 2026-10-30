@@ -1,4 +1,5 @@
 @startuml sd_login_account_on_peer
+skinparam backgroundColor #FFFFFF
 title Scenario: logging in with an account created moments ago on another login
 
 autonumber

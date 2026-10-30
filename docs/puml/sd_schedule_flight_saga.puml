@@ -1,4 +1,5 @@
 @startuml sd_schedule_flight_saga
+skinparam backgroundColor #FFFFFF
 title Scenario: schedule a flight (Saga across three services, with compensations)
 
 autonumber

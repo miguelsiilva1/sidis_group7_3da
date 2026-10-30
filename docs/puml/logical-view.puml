@@ -1,4 +1,5 @@
 @startuml logical-view
+skinparam backgroundColor #FFFFFF
 title AISafe - Logical view (UML components, level 1)
 
 skinparam componentStyle uml2

@@ -1,0 +1,26 @@
+@startuml sd_us115b
+skinparam backgroundColor #FFFFFF
+title US115b - Sequence Diagram
+autonumber
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 260
+actor "Maintenance Technician" as Actor
+participant "Entry (Envoy)\nvirtual IP of aircraft-maintenance" as EAM
+box "aircraft-maintenance-n (the replica that answers)" #F7F7F7
+participant "MaintenanceController" as MaintenanceController
+participant "CreateMaintenanceTemplateUseCase" as CreateMaintenanceTemplateUseCase
+database "own database" as DBAM
+participant "Outbox dispatcher" as OBAM
+end box
+collections "peer replicas\naircraft-maintenance-m" as PAM
+== POST /api/maintenance/templates ==
+Actor -> EAM : POST /api/maintenance/templates\n(HTTPS, Authorization: Bearer JWT)
+EAM -> MaintenanceController : to a ready replica\n(another one if it fails)
+MaintenanceController -> CreateMaintenanceTemplateUseCase : execute(...)
+CreateMaintenanceTemplateUseCase -> DBAM : template name already in the catalog?
+CreateMaintenanceTemplateUseCase -> DBAM : save maintenance template + one copy per other replica in the outbox\n(same transaction)
+CreateMaintenanceTemplateUseCase --> MaintenanceController : created
+MaintenanceController --> Actor : 201 Created
+OBAM -> PAM : PUT /internal/replicas/maintenance-templates\n(to every other replica, retried until delivered)
+PAM --> OBAM : 200 (applied if newer)
+@enduml

@@ -1,0 +1,19 @@
+@startuml ssd_us207
+skinparam backgroundColor #FFFFFF
+title US207 - System Sequence Diagram
+autonumber
+actor "Backoffice Operator" as Actor
+participant "AISafe\nairports-routes\n(virtual IP 192.168.124.26, HTTPS)" as AR
+Actor -> AR : POST /api/airports
+activate AR
+AR --> Actor : 201 Created
+deactivate AR
+Actor -> AR : POST /api/airports/{iataCode}/photos
+activate AR
+AR --> Actor : 201 Created
+deactivate AR
+Actor -> AR : GET /api/airports/{iataCode}/photos/{index}
+activate AR
+AR --> Actor : 200 OK
+deactivate AR
+@enduml

@@ -1,0 +1,35 @@
+@startuml sd_us227
+skinparam backgroundColor #FFFFFF
+title US227 - Sequence Diagram
+autonumber
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 260
+actor "ATCC" as Actor
+participant "Entry (Envoy)\nvirtual IP of airports-routes" as EAR
+box "airports-routes-n (the replica that answers)" #F7F7F7
+participant "RouteController" as RouteController
+participant "CalculateFuelEfficiencyUseCase" as CalculateFuelEfficiencyUseCase
+database "own database" as DBAR
+end box
+collections "peer replicas\nairports-routes-m" as PAR
+participant "aircraft-maintenance\n(through aircraft-maintenance-local)" as OAM
+== GET /api/routes/{origin}/{destination}/fuel-efficiency?aircraft={registration} ==
+Actor -> EAR : GET /api/routes/{origin}/{destination}/fuel-efficiency?aircraft={registration}\n(HTTPS, Authorization: Bearer JWT)
+EAR -> RouteController : to a ready replica\n(another one if it fails)
+RouteController -> CalculateFuelEfficiencyUseCase : execute(...)
+CalculateFuelEfficiencyUseCase -> OAM : C1: GET /internal/aircrafts/{registration}\n(the actor's token)
+OAM --> CalculateFuelEfficiencyUseCase : 200 the aircraft: status, model, seats, range, fuel consumption
+CalculateFuelEfficiencyUseCase -> DBAR : find route
+alt held by this replica
+DBAR --> CalculateFuelEfficiencyUseCase : route
+CalculateFuelEfficiencyUseCase --> RouteController : result
+RouteController --> Actor : 200 OK (X-Node-Id)
+else not held here (NotFoundException)
+DBAR --> CalculateFuelEfficiencyUseCase : nothing
+CalculateFuelEfficiencyUseCase --> RouteController : NotFoundException
+RouteController -> PAR : same GET, X-Peer-Forwarded\n(every peer in parallel; 0.5 s to connect, 2 s to answer, one retry, circuit breaker)
+PAR --> RouteController : 200 from the first peer that holds it
+RouteController --> Actor : 200 OK (X-Node-Id, X-Data-Node)
+note over RouteController, PAR : 404 only if every peer answered without it;\n503 with Retry-After if a peer could not be asked
+end
+@enduml

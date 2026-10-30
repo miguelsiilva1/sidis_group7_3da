@@ -1,4 +1,5 @@
 @startuml components
+skinparam backgroundColor #FFFFFF
 !include <C4/C4_Component>
 skinparam defaultFontSize 16
 

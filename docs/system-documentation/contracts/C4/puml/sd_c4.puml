@@ -1,0 +1,38 @@
+@startuml sd_c4
+skinparam backgroundColor #FFFFFF
+title C4 - Copy of a flight to aircraft-maintenance
+autonumber
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 240
+participant "flight-ops-n\n(replica of the caller)" as Caller
+participant "aircraft-maintenance-local\n(Envoy of the same machine)" as Entry
+box "aircraft-maintenance-k (a ready replica)" #F7F7F7
+participant "FlightCopyController" as Ctrl
+participant "RecordFlightCopyUseCase" as UC
+database "own database" as DB
+end box
+collections "peer replicas\naircraft-maintenance-m" as Peers
+Caller -> Entry : PUT /internal/flights/{id}\n(Authorization: actor's JWT or service token;\nX-Correlation-Id)
+Entry -> Ctrl : to a ready replica\n(another one if it fails)
+Ctrl -> UC : execute(...)
+UC -> DB : copy with this id already stored?
+alt same or newer version already stored
+Ctrl --> Entry : 200 (idempotent, nothing changes)
+else new copy
+UC -> DB : find aircraft
+opt not held here
+UC -> Peers : GET /internal/aircrafts/{registration}
+Peers --> UC : 200 / 404
+end
+alt aircraft unknown
+Ctrl --> Entry : 404
+else aircraft cannot take the flight
+Ctrl --> Entry : 409
+else accepted
+UC -> DB : save copy + copy for the next replica in the outbox\n(same transaction)
+Ctrl --> Entry : 200
+end
+end
+Entry --> Caller : answer
+note over Caller : 404, 409 or no answer: flight-ops undoes the scheduling;\na cancellation that is not delivered is retried every 5 s
+@enduml

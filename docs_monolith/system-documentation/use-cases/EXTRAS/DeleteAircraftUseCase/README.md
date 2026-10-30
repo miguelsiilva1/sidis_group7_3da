@@ -29,9 +29,9 @@
 
 ## Alternative / Exception Flows
 
-| Step | Condition                                             | System Response |
-| ---- | ----------------------------------------------------- | --------------- |
-| 2    | Aircraft not found                                    | HTTP 404        |
+| Step | Condition                                              | System Response |
+| ---- | ------------------------------------------------------ | --------------- |
+| 2    | Aircraft not found                                     | HTTP 404        |
 | 3    | Aircraft is assigned to flights or maintenance records | HTTP 409        |
 
 ## Design Justification
@@ -44,4 +44,3 @@
 
 - [System Sequence Diagram](puml/ssd_deleteAircraft.puml)
 - [Sequence Diagram](puml/sd_deleteAircraft.puml)
-

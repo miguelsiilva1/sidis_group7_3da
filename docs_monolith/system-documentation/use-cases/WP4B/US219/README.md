@@ -27,9 +27,9 @@
 
 ## Alternative / Exception Flows
 
-| Step | Condition                      | System Response                 |
-| ---- | ------------------------------ | ------------------------------- |
-| 2    | No in-progress records exist   | HTTP 200 with an empty page     |
+| Step | Condition                    | System Response             |
+| ---- | ---------------------------- | --------------------------- |
+| 2    | No in-progress records exist | HTTP 200 with an empty page |
 
 ## Sequence Diagrams
 

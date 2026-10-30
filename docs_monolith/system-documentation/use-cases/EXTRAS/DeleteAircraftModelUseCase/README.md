@@ -28,9 +28,9 @@
 
 ## Alternative / Exception Flows
 
-| Step | Condition                       | System Response |
-| ---- | ------------------------------- | --------------- |
-| 2    | Aircraft model not found        | HTTP 404        |
+| Step | Condition                        | System Response |
+| ---- | -------------------------------- | --------------- |
+| 2    | Aircraft model not found         | HTTP 404        |
 | 2    | Existing aircraft use this model | HTTP 409        |
 
 ## Design Justification
@@ -41,4 +41,3 @@
 
 - [System Sequence Diagram](puml/ssd_deleteAircraftModel.puml)
 - [Sequence Diagram](puml/sd_deleteAircraftModel.puml)
-

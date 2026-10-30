@@ -23,16 +23,16 @@
 
 ## Endpoints
 
-| Domain                | Endpoint                                | Controller               |
-| --------------------- | --------------------------------------- | ------------------------ |
-| Aircraft Models       | `POST /api/aircraftModels/import`       | AircraftModelController  |
-| Aircrafts             | `POST /api/aircrafts/import`            | AircraftController       |
-| Airports              | `POST /api/airports/import`             | AirportController        |
-| Routes                | `POST /api/routes/import`               | RouteController          |
-| Flights               | `POST /api/flights/import`              | FlightController         |
-| Maintenance Templates | `POST /api/maintenance/templates/import`| MaintenanceController    |
-| Maintenance Records   | `POST /api/maintenance/records/import`  | MaintenanceController    |
-| Maintenance Parts     | `POST /api/maintenance/parts/import`    | MaintenanceController    |
+| Domain                | Endpoint                                 | Controller              |
+| --------------------- | ---------------------------------------- | ----------------------- |
+| Aircraft Models       | `POST /api/aircraftModels/import`        | AircraftModelController |
+| Aircrafts             | `POST /api/aircrafts/import`             | AircraftController      |
+| Airports              | `POST /api/airports/import`              | AirportController       |
+| Routes                | `POST /api/routes/import`                | RouteController         |
+| Flights               | `POST /api/flights/import`               | FlightController        |
+| Maintenance Templates | `POST /api/maintenance/templates/import` | MaintenanceController   |
+| Maintenance Records   | `POST /api/maintenance/records/import`   | MaintenanceController   |
+| Maintenance Parts     | `POST /api/maintenance/parts/import`     | MaintenanceController   |
 
 ## Main Success Scenario
 

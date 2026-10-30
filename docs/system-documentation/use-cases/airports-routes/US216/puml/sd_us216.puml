@@ -1,0 +1,25 @@
+@startuml sd_us216
+skinparam backgroundColor #FFFFFF
+title US216 - Sequence Diagram
+autonumber
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 260
+actor "ATCC" as Actor
+participant "Entry (Envoy)\nvirtual IP of airports-routes" as EAR
+box "airports-routes-n (the replica that answers)" #F7F7F7
+participant "RouteController" as RouteController
+participant "SearchAlternativeRoutesUseCase" as SearchAlternativeRoutesUseCase
+database "own database" as DBAR
+end box
+collections "peer replicas\nairports-routes-m" as PAR
+== GET /api/routes/alternatives ==
+Actor -> EAR : GET /api/routes/alternatives\n(HTTPS, Authorization: Bearer JWT)
+EAR -> RouteController : to a ready replica\n(another one if it fails)
+RouteController -> SearchAlternativeRoutesUseCase : execute(...)
+SearchAlternativeRoutesUseCase -> DBAR : own routes
+SearchAlternativeRoutesUseCase -> PAR : GET /internal/replicas/routes\n(every peer in parallel)
+PAR --> SearchAlternativeRoutesUseCase : their routes
+SearchAlternativeRoutesUseCase -> SearchAlternativeRoutesUseCase : keep the latest change of each record,\nleave out deleted ones; filter, compute, sort, page
+SearchAlternativeRoutesUseCase --> RouteController : result
+RouteController --> Actor : 200 OK (X-Node-Id; X-Partial-Result if both holders of a record were unreachable)
+@enduml

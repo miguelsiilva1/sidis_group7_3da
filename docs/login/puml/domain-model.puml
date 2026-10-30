@@ -1,4 +1,5 @@
 @startuml domain-model
+skinparam backgroundColor #FFFFFF
 title login - Domain model
 
 hide empty methods

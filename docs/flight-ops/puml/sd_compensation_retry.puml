@@ -1,4 +1,5 @@
 @startuml sd_compensation_retry
+skinparam backgroundColor #FFFFFF
 title Scenario: a compensation that cannot be delivered (aircraft-maintenance down)
 
 autonumber

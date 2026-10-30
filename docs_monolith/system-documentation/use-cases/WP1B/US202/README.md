@@ -44,13 +44,13 @@
 
 ## Alternative / Exception Flows
 
-| Step | Condition                                  | System Response                                        |
-| ---- | ------------------------------------------ | ------------------------------------------------------ |
-| 2    | Uploaded file MIME type is not `image/*`   | HTTP 400                                               |
-| 2    | JSON POST includes `image` field           | HTTP 400 - hint to use multipart/form-data             |
-| 3    | Model name already exists                  | HTTP 409 Conflict                                      |
-| -    | PATCH / GET: model name not found          | HTTP 404                                               |
-| -    | GET: model has no image                    | HTTP 404                                               |
+| Step | Condition                                | System Response                            |
+| ---- | ---------------------------------------- | ------------------------------------------ |
+| 2    | Uploaded file MIME type is not `image/*` | HTTP 400                                   |
+| 2    | JSON POST includes `image` field         | HTTP 400 - hint to use multipart/form-data |
+| 3    | Model name already exists                | HTTP 409 Conflict                          |
+| -    | PATCH / GET: model name not found        | HTTP 404                                   |
+| -    | GET: model has no image                  | HTTP 404                                   |
 
 ## Design Justification
 

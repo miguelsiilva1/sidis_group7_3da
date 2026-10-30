@@ -1,4 +1,5 @@
 @startuml physical-view
+skinparam backgroundColor #FFFFFF
 title AISafe - Physical view (deployment on Proxmox + k3s)
 
 skinparam shadowing false

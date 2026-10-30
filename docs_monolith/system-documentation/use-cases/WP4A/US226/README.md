@@ -7,12 +7,14 @@
 ## Acceptance Criteria
 
 ### Part Registration
+
 - The request must provide `partNumber`, `name`, `description`, `stockQuantity`, `minimumThreshold`, and `component`.
 - `component` is a fixed enum value (`ENGINE`, `AIRFRAME`, `AVIONICS`, `INTERIOR`, `EXTERIOR`).
 - Part numbers must be unique.
 - On success the system returns HTTP 201 with the enriched `MaintenancePart` representation.
 
 ### Inventory Tracking & Alerts
+
 - Maintenance Supervisors can search for parts by `partNumber` (partial), `name` (partial), and `component`.
 - The system must provide a mechanism to filter parts in "low stock" (where `stockQuantity < minimumThreshold`).
 - Search results are paginated and include HATEOAS links to update the part.

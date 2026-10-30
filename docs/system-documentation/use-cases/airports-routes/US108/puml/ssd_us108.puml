@@ -1,0 +1,11 @@
+@startuml ssd_us108
+skinparam backgroundColor #FFFFFF
+title US108 - System Sequence Diagram
+autonumber
+actor "ATCC" as Actor
+participant "AISafe\nairports-routes\n(virtual IP 192.168.124.26, HTTPS)" as AR
+Actor -> AR : GET /api/airports/search
+activate AR
+AR --> Actor : 200 OK
+deactivate AR
+@enduml

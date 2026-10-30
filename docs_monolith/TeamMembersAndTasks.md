@@ -32,12 +32,12 @@ Finally, keep in mind that each User Story is not isolated -- it must be integra
 **The following table must always be kept up to date.**
 
 | Task                                                                                                          | Vasco Magolo | Diogo Nogueira | Pedro Guilherme |
-|:--------------------------------------------------------------------------------------------------------------|:------------:|:--------------:|:---------------:|
+| :------------------------------------------------------------------------------------------------------------ | :----------: | :------------: | :-------------: |
 | **Shared Artifacts & Setup**                                                                                  |              |                |                 |
 | [WP #0 - Glossary](system-documentation/global-artifacts/glossary.md)                                         |      x       |       x        |        x        |
 | [WP #0 - Domain Model](system-documentation/global-artifacts/puml/DM.puml)                                    |      x       |       x        |        x        |
 | WP #0A - Bootstrap Admins & Initial Data                                                                      |      x       |       x        |        x        |
-| WP #0B - Data Bootstrapping Phase 2                                                                            |      x       |       x        |        x        |
+| WP #0B - Data Bootstrapping Phase 2                                                                           |      x       |       x        |        x        |
 | **WP #1A - Aircraft Management**                                                                              |              |                |                 |
 | [US101 - Register aircraft model](system-documentation/use-cases/WP1A/US101)                                  |      x       |                |                 |
 | [US102 - Register specific aircraft instance](system-documentation/use-cases/WP1A/US102)                      |      x       |                |                 |
@@ -82,7 +82,7 @@ Finally, keep in mind that each User Story is not isolated -- it must be integra
 | [US117 - View total maintenance hours for fleet](system-documentation/use-cases/WP4A/US117)                   |      x       |       x        |        x        |
 | [US119 - Update maintenance record (mark completed)](system-documentation/use-cases/WP4A/US119)               |      x       |       x        |        x        |
 | [US222 - Maintenance due alerts](system-documentation/use-cases/WP4A/US222)                                   |      x       |       x        |        x        |
-| [US226 - Track maintenance parts inventory (also BONUS)](system-documentation/use-cases/WP4A/US226)            |      x       |       x        |        x        |
+| [US226 - Track maintenance parts inventory (also BONUS)](system-documentation/use-cases/WP4A/US226)           |      x       |       x        |        x        |
 | **WP #4B - Maintenance Analytics**                                                                            |              |                |                 |
 | [US217 - Categorize maintenance records by component](system-documentation/use-cases/WP4B/US217)              |      x       |       x        |        x        |
 | [US218 - Search maintenance records](system-documentation/use-cases/WP4B/US218)                               |      x       |       x        |        x        |

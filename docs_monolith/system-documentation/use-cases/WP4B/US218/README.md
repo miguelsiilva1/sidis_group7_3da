@@ -27,10 +27,10 @@
 
 ## Alternative / Exception Flows
 
-| Step | Condition              | System Response                 |
-| ---- | ---------------------- | ------------------------------- |
-| 2    | No matching records    | HTTP 200 with an empty page     |
-| 1    | Invalid date format    | HTTP 400                        |
+| Step | Condition           | System Response             |
+| ---- | ------------------- | --------------------------- |
+| 2    | No matching records | HTTP 200 with an empty page |
+| 1    | Invalid date format | HTTP 400                    |
 
 ## Sequence Diagrams
 

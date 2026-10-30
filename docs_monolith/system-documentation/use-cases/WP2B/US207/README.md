@@ -45,14 +45,14 @@
 
 ## Alternative / Exception Flows
 
-| Step | Condition                                  | System Response                                    |
-| ---- | ------------------------------------------ | -------------------------------------------------- |
-| 2    | Uploaded file MIME type is not `image/*`   | HTTP 400                                           |
-| 2    | JSON POST includes `image` field           | HTTP 400 - hint to use multipart/form-data         |
-| 2    | Required field missing or invalid          | HTTP 400                                           |
-| 3    | IATA code already registered               | HTTP 409 Conflict                                  |
-| -    | PATCH / GET: airport not found             | HTTP 404                                           |
-| -    | GET: airport has no photo                  | HTTP 404                                           |
+| Step | Condition                                | System Response                            |
+| ---- | ---------------------------------------- | ------------------------------------------ |
+| 2    | Uploaded file MIME type is not `image/*` | HTTP 400                                   |
+| 2    | JSON POST includes `image` field         | HTTP 400 - hint to use multipart/form-data |
+| 2    | Required field missing or invalid        | HTTP 400                                   |
+| 3    | IATA code already registered             | HTTP 409 Conflict                          |
+| -    | PATCH / GET: airport not found           | HTTP 404                                   |
+| -    | GET: airport has no photo                | HTTP 404                                   |
 
 ## Design Justification
 

@@ -31,9 +31,9 @@
 
 ## Alternative / Exception Flows
 
-| Step | Condition          | System Response |
-| ---- | ------------------ | --------------- |
-| 2    | Part not found     | HTTP 404        |
+| Step | Condition      | System Response |
+| ---- | -------------- | --------------- |
+| 2    | Part not found | HTTP 404        |
 
 ## Sequence Diagrams
 

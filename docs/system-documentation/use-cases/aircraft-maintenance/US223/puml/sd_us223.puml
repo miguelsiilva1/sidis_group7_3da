@@ -1,0 +1,28 @@
+@startuml sd_us223
+skinparam backgroundColor #FFFFFF
+title US223 - Sequence Diagram
+autonumber
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 260
+actor "ATCC" as Actor
+participant "Entry (Envoy)\nvirtual IP of aircraft-maintenance" as EAM
+box "aircraft-maintenance-n (the replica that answers)" #F7F7F7
+participant "AircraftController" as AircraftController
+participant "GetAircraftUtilizationUseCase" as GetAircraftUtilizationUseCase
+database "own database" as DBAM
+end box
+collections "peer replicas\naircraft-maintenance-m" as PAM
+== GET /api/aircrafts/{registration}/utilization ==
+Actor -> EAM : GET /api/aircrafts/{registration}/utilization\n(HTTPS, Authorization: Bearer JWT)
+EAM -> AircraftController : to a ready replica\n(another one if it fails)
+AircraftController -> GetAircraftUtilizationUseCase : execute(...)
+GetAircraftUtilizationUseCase -> DBAM : own aircraft
+GetAircraftUtilizationUseCase -> PAM : GET /internal/replicas/aircrafts\n(every peer in parallel)
+PAM --> GetAircraftUtilizationUseCase : their aircraft
+GetAircraftUtilizationUseCase -> DBAM : own copies of the flights (sent by flight-ops)
+GetAircraftUtilizationUseCase -> PAM : GET /internal/replicas/flight-copies\n(every peer in parallel)
+PAM --> GetAircraftUtilizationUseCase : their copies of the flights (sent by flight-ops)
+GetAircraftUtilizationUseCase -> GetAircraftUtilizationUseCase : keep the latest change of each record,\nleave out deleted ones; filter, compute, sort, page
+GetAircraftUtilizationUseCase --> AircraftController : result
+AircraftController --> Actor : 200 OK (X-Node-Id; X-Partial-Result if both holders of a record were unreachable)
+@enduml
