@@ -1,0 +1,25 @@
+@startuml sd_us229
+skinparam backgroundColor #FFFFFF
+title US229 - Sequence Diagram
+autonumber
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 260
+actor "Backoffice Operator" as Actor
+participant "Entry (Envoy)\nvirtual IP of flight-ops" as EFO
+box "flight-ops-n (the replica that answers)" #F7F7F7
+participant "FlightUtilizationController" as FlightUtilizationController
+participant "GenerateFlightUtilizationReportUseCase" as GenerateFlightUtilizationReportUseCase
+database "own database" as DBFO
+end box
+collections "peer replicas\nflight-ops-m" as PFO
+== GET /api/flights/reports/utilization ==
+Actor -> EFO : GET /api/flights/reports/utilization\n(HTTPS, Authorization: Bearer JWT)
+EFO -> FlightUtilizationController : to a ready replica\n(another one if it fails)
+FlightUtilizationController -> GenerateFlightUtilizationReportUseCase : execute(...)
+GenerateFlightUtilizationReportUseCase -> DBFO : own flights
+GenerateFlightUtilizationReportUseCase -> PFO : GET /internal/replicas/flights\n(every peer in parallel)
+PFO --> GenerateFlightUtilizationReportUseCase : their flights
+GenerateFlightUtilizationReportUseCase -> GenerateFlightUtilizationReportUseCase : keep the latest change of each record,\nleave out deleted ones; filter, compute, sort, page
+GenerateFlightUtilizationReportUseCase --> FlightUtilizationController : result
+FlightUtilizationController --> Actor : 200 OK (X-Node-Id; X-Partial-Result if both holders of a record were unreachable)
+@enduml

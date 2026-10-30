@@ -1,0 +1,32 @@
+@startuml sd_us115a
+skinparam backgroundColor #FFFFFF
+title US115a - Sequence Diagram
+autonumber
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 260
+actor "Maintenance Technician" as Actor
+participant "Entry (Envoy)\nvirtual IP of aircraft-maintenance" as EAM
+box "aircraft-maintenance-n (the replica that answers)" #F7F7F7
+participant "MaintenanceController" as MaintenanceController
+participant "CreateMaintenanceRecordUseCase" as CreateMaintenanceRecordUseCase
+database "own database" as DBAM
+participant "Outbox dispatcher" as OBAM
+end box
+collections "peer replicas\naircraft-maintenance-m" as PAM
+== POST /api/maintenance/records ==
+Actor -> EAM : POST /api/maintenance/records\n(HTTPS, Authorization: Bearer JWT)
+EAM -> MaintenanceController : to a ready replica\n(another one if it fails)
+MaintenanceController -> CreateMaintenanceRecordUseCase : execute(...)
+CreateMaintenanceRecordUseCase -> DBAM : aircraft here?
+opt not found here
+CreateMaintenanceRecordUseCase -> PAM : GET /internal/aircrafts/{registration}\n(asks the peers)
+PAM --> CreateMaintenanceRecordUseCase : 200 / 404
+end
+CreateMaintenanceRecordUseCase -> DBAM : maintenance templates (catalog, complete here)
+CreateMaintenanceRecordUseCase -> DBAM : maintenance parts (catalog, complete here)
+CreateMaintenanceRecordUseCase -> DBAM : save maintenance record + copy for the next replica in the outbox\n(same transaction)
+CreateMaintenanceRecordUseCase --> MaintenanceController : created
+MaintenanceController --> Actor : 201 Created
+OBAM -> PAM : PUT /internal/replicas/maintenance-records\n(to the next replica in the ring, retried until delivered)
+PAM --> OBAM : 200 (applied if newer)
+@enduml

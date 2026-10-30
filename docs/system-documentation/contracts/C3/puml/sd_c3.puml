@@ -1,0 +1,22 @@
+@startuml sd_c3
+skinparam backgroundColor #FFFFFF
+title C3 - Aircraft model exists
+autonumber
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 240
+participant "airports-routes-n\n(replica of the caller)" as Caller
+participant "aircraft-maintenance-local\n(Envoy of the same machine)" as Entry
+box "aircraft-maintenance-k (a ready replica)" #F7F7F7
+participant "InternalController" as Ctrl
+participant "ViewAircraftModelForServicesUseCase" as UC
+database "own database" as DB
+end box
+collections "peer replicas\naircraft-maintenance-m" as Peers
+Caller -> Entry : GET /internal/aircraft-models/{name}\n(Authorization: actor's JWT or service token;\nX-Correlation-Id)
+Entry -> Ctrl : to a ready replica\n(another one if it fails)
+Ctrl -> UC : execute(...)
+UC -> DB : find model (catalog, complete here)
+DB --> UC : found / not found
+Ctrl --> Entry : 200 / 404
+Entry --> Caller : answer
+@enduml

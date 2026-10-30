@@ -1,0 +1,28 @@
+@startuml sd_us203
+skinparam backgroundColor #FFFFFF
+title US203 - Sequence Diagram
+autonumber
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 260
+actor "ATCC" as Actor
+participant "Entry (Envoy)\nvirtual IP of airports-routes" as EAR
+box "airports-routes-n (the replica that answers)" #F7F7F7
+participant "RouteController" as RouteController
+participant "ViewCompatibleRoutesUseCase" as ViewCompatibleRoutesUseCase
+database "own database" as DBAR
+end box
+collections "peer replicas\nairports-routes-m" as PAR
+participant "aircraft-maintenance\n(through aircraft-maintenance-local)" as OAM
+== GET /api/routes/compatible?aircraft={registration} ==
+Actor -> EAR : GET /api/routes/compatible?aircraft={registration}\n(HTTPS, Authorization: Bearer JWT)
+EAR -> RouteController : to a ready replica\n(another one if it fails)
+RouteController -> ViewCompatibleRoutesUseCase : execute(...)
+ViewCompatibleRoutesUseCase -> OAM : C1: GET /internal/aircrafts/{registration}\n(the actor's token)
+OAM --> ViewCompatibleRoutesUseCase : 200 the aircraft: status, model, seats, range, fuel consumption
+ViewCompatibleRoutesUseCase -> DBAR : own routes
+ViewCompatibleRoutesUseCase -> PAR : GET /internal/replicas/routes\n(every peer in parallel)
+PAR --> ViewCompatibleRoutesUseCase : their routes
+ViewCompatibleRoutesUseCase -> ViewCompatibleRoutesUseCase : keep the latest change of each record,\nleave out deleted ones; filter, compute, sort, page
+ViewCompatibleRoutesUseCase --> RouteController : result
+RouteController --> Actor : 200 OK (X-Node-Id; X-Partial-Result if both holders of a record were unreachable)
+@enduml

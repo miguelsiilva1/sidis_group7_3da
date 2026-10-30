@@ -1,0 +1,15 @@
+@startuml ssd_us220
+skinparam backgroundColor #FFFFFF
+title US220 - System Sequence Diagram
+autonumber
+actor "ATCC" as Actor
+participant "AISafe\naircraft-maintenance\n(virtual IP 192.168.124.25, HTTPS)" as AM
+Actor -> AM : GET /api/maintenance/records/cost/aircraft/{registration}
+activate AM
+AM --> Actor : 200 OK
+deactivate AM
+Actor -> AM : GET /api/maintenance/records/cost/model/{modelName}
+activate AM
+AM --> Actor : 200 OK
+deactivate AM
+@enduml

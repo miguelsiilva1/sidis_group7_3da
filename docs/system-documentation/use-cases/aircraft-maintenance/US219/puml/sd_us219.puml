@@ -1,0 +1,25 @@
+@startuml sd_us219
+skinparam backgroundColor #FFFFFF
+title US219 - Sequence Diagram
+autonumber
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 260
+actor "Maintenance Supervisor" as Actor
+participant "Entry (Envoy)\nvirtual IP of aircraft-maintenance" as EAM
+box "aircraft-maintenance-n (the replica that answers)" #F7F7F7
+participant "MaintenanceController" as MaintenanceController
+participant "ViewOngoingMaintenanceUseCase" as ViewOngoingMaintenanceUseCase
+database "own database" as DBAM
+end box
+collections "peer replicas\naircraft-maintenance-m" as PAM
+== GET /api/maintenance/records/ongoing ==
+Actor -> EAM : GET /api/maintenance/records/ongoing\n(HTTPS, Authorization: Bearer JWT)
+EAM -> MaintenanceController : to a ready replica\n(another one if it fails)
+MaintenanceController -> ViewOngoingMaintenanceUseCase : execute(...)
+ViewOngoingMaintenanceUseCase -> DBAM : own maintenance records
+ViewOngoingMaintenanceUseCase -> PAM : GET /internal/replicas/maintenance-records\n(every peer in parallel)
+PAM --> ViewOngoingMaintenanceUseCase : their maintenance records
+ViewOngoingMaintenanceUseCase -> ViewOngoingMaintenanceUseCase : keep the latest change of each record,\nleave out deleted ones; filter, compute, sort, page
+ViewOngoingMaintenanceUseCase --> MaintenanceController : result
+MaintenanceController --> Actor : 200 OK (X-Node-Id; X-Partial-Result if both holders of a record were unreachable)
+@enduml

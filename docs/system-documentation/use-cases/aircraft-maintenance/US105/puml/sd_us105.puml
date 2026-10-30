@@ -1,0 +1,32 @@
+@startuml sd_us105
+skinparam backgroundColor #FFFFFF
+title US105 - Sequence Diagram
+autonumber
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 260
+actor "Backoffice Operator" as Actor
+participant "Entry (Envoy)\nvirtual IP of aircraft-maintenance" as EAM
+box "aircraft-maintenance-n (the replica that answers)" #F7F7F7
+participant "AircraftController" as AircraftController
+participant "UpdateAircraftUseCase" as UpdateAircraftUseCase
+database "own database" as DBAM
+participant "Outbox dispatcher" as OBAM
+end box
+collections "peer replicas\naircraft-maintenance-m" as PAM
+== PATCH /api/aircrafts/{registration} ==
+Actor -> EAM : PATCH /api/aircrafts/{registration}\n(HTTPS, Authorization: Bearer JWT)
+EAM -> AircraftController : to a ready replica\n(another one if it fails)
+AircraftController -> UpdateAircraftUseCase : execute(...)
+UpdateAircraftUseCase -> DBAM : find aircraft
+alt held by this replica
+UpdateAircraftUseCase -> DBAM : check version, apply the change\n+ copy for the other holder in the outbox (same transaction)
+UpdateAircraftUseCase --> AircraftController : updated
+AircraftController --> Actor : 200 OK
+OBAM -> PAM : PUT /internal/replicas/aircrafts\n(to the other holder, retried until delivered)
+else not held here
+AircraftController -> PAM : same PATCH, X-Peer-Forwarded\n(to the peers one at a time, until a holder answers)
+PAM --> AircraftController : 200 from the holder
+AircraftController --> Actor : 200 OK (X-Data-Node)
+note over PAM : the holder copies the change\nto the other holder
+end
+@enduml

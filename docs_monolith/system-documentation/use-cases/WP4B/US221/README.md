@@ -29,10 +29,10 @@
 
 ## Alternative / Exception Flows
 
-| Step | Condition                      | System Response                              |
-| ---- | ------------------------------ | -------------------------------------------- |
-| 2    | Aircraft model not found       | HTTP 404                                     |
-| 3    | No completed records for model | HTTP 200 with average 0.0 and count 0        |
+| Step | Condition                      | System Response                       |
+| ---- | ------------------------------ | ------------------------------------- |
+| 2    | Aircraft model not found       | HTTP 404                              |
+| 3    | No completed records for model | HTTP 200 with average 0.0 and count 0 |
 
 ## Sequence Diagrams
 

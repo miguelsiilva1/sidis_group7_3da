@@ -1,0 +1,43 @@
+@startuml sd_us220
+skinparam backgroundColor #FFFFFF
+title US220 - Sequence Diagram
+autonumber
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 260
+actor "ATCC" as Actor
+participant "Entry (Envoy)\nvirtual IP of aircraft-maintenance" as EAM
+box "aircraft-maintenance-n (the replica that answers)" #F7F7F7
+participant "MaintenanceController" as MaintenanceController
+participant "ViewMaintenanceCostByAircraftUseCase" as ViewMaintenanceCostByAircraftUseCase
+participant "ViewMaintenanceCostByModelUseCase" as ViewMaintenanceCostByModelUseCase
+database "own database" as DBAM
+end box
+collections "peer replicas\naircraft-maintenance-m" as PAM
+== GET /api/maintenance/records/cost/aircraft/{registration} ==
+Actor -> EAM : GET /api/maintenance/records/cost/aircraft/{registration}\n(HTTPS, Authorization: Bearer JWT)
+EAM -> MaintenanceController : to a ready replica\n(another one if it fails)
+MaintenanceController -> ViewMaintenanceCostByAircraftUseCase : execute(...)
+ViewMaintenanceCostByAircraftUseCase -> DBAM : own aircraft
+ViewMaintenanceCostByAircraftUseCase -> PAM : GET /internal/replicas/aircrafts\n(every peer in parallel)
+PAM --> ViewMaintenanceCostByAircraftUseCase : their aircraft
+ViewMaintenanceCostByAircraftUseCase -> DBAM : own maintenance records
+ViewMaintenanceCostByAircraftUseCase -> PAM : GET /internal/replicas/maintenance-records\n(every peer in parallel)
+PAM --> ViewMaintenanceCostByAircraftUseCase : their maintenance records
+ViewMaintenanceCostByAircraftUseCase -> ViewMaintenanceCostByAircraftUseCase : keep the latest change of each record,\nleave out deleted ones; filter, compute, sort, page
+ViewMaintenanceCostByAircraftUseCase --> MaintenanceController : result
+MaintenanceController --> Actor : 200 OK (X-Node-Id; X-Partial-Result if both holders of a record were unreachable)
+== GET /api/maintenance/records/cost/model/{modelName} ==
+Actor -> EAM : GET /api/maintenance/records/cost/model/{modelName}\n(HTTPS, Authorization: Bearer JWT)
+EAM -> MaintenanceController : to a ready replica\n(another one if it fails)
+MaintenanceController -> ViewMaintenanceCostByModelUseCase : execute(...)
+ViewMaintenanceCostByModelUseCase -> DBAM : own aircraft
+ViewMaintenanceCostByModelUseCase -> PAM : GET /internal/replicas/aircrafts\n(every peer in parallel)
+PAM --> ViewMaintenanceCostByModelUseCase : their aircraft
+ViewMaintenanceCostByModelUseCase -> DBAM : own maintenance records
+ViewMaintenanceCostByModelUseCase -> PAM : GET /internal/replicas/maintenance-records\n(every peer in parallel)
+PAM --> ViewMaintenanceCostByModelUseCase : their maintenance records
+ViewMaintenanceCostByModelUseCase -> DBAM : aircraft models (catalog, complete here)
+ViewMaintenanceCostByModelUseCase -> ViewMaintenanceCostByModelUseCase : keep the latest change of each record,\nleave out deleted ones; filter, compute, sort, page
+ViewMaintenanceCostByModelUseCase --> MaintenanceController : result
+MaintenanceController --> Actor : 200 OK (X-Node-Id; X-Partial-Result if both holders of a record were unreachable)
+@enduml

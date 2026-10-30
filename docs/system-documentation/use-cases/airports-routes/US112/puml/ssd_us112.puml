@@ -1,0 +1,15 @@
+@startuml ssd_us112
+skinparam backgroundColor #FFFFFF
+title US112 - System Sequence Diagram
+autonumber
+actor "ATCC" as Actor
+participant "AISafe\nairports-routes\n(virtual IP 192.168.124.26, HTTPS)" as AR
+Actor -> AR : PUT /api/routes/{origin}/{destination}
+activate AR
+AR --> Actor : 200 OK
+deactivate AR
+Actor -> AR : PATCH /api/routes/{origin}/{destination}/deactivate
+activate AR
+AR --> Actor : 200 OK
+deactivate AR
+@enduml

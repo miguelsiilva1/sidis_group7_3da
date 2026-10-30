@@ -1,0 +1,61 @@
+@startuml sd_us226
+skinparam backgroundColor #FFFFFF
+title US226 - Sequence Diagram
+autonumber
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 260
+actor "Maintenance Technician" as Actor
+participant "Entry (Envoy)\nvirtual IP of aircraft-maintenance" as EAM
+box "aircraft-maintenance-n (the replica that answers)" #F7F7F7
+participant "MaintenanceController" as MaintenanceController
+participant "CreateMaintenancePartUseCase" as CreateMaintenancePartUseCase
+participant "UpdateMaintenancePartUseCase" as UpdateMaintenancePartUseCase
+participant "DeleteMaintenancePartUseCase" as DeleteMaintenancePartUseCase
+participant "SearchMaintenancePartUseCase" as SearchMaintenancePartUseCase
+database "own database" as DBAM
+participant "Outbox dispatcher" as OBAM
+end box
+collections "peer replicas\naircraft-maintenance-m" as PAM
+== POST /api/maintenance/parts ==
+Actor -> EAM : POST /api/maintenance/parts\n(HTTPS, Authorization: Bearer JWT)
+EAM -> MaintenanceController : to a ready replica\n(another one if it fails)
+MaintenanceController -> CreateMaintenancePartUseCase : execute(...)
+CreateMaintenancePartUseCase -> DBAM : part number already in the catalog?
+CreateMaintenancePartUseCase -> DBAM : save maintenance part + one copy per other replica in the outbox\n(same transaction)
+CreateMaintenancePartUseCase --> MaintenanceController : created
+MaintenanceController --> Actor : 201 Created
+OBAM -> PAM : PUT /internal/replicas/maintenance-parts\n(to every other replica, retried until delivered)
+PAM --> OBAM : 200 (applied if newer)
+== PATCH /api/maintenance/parts/{partNumber} ==
+Actor -> EAM : PATCH /api/maintenance/parts/{partNumber}\n(HTTPS, Authorization: Bearer JWT)
+EAM -> MaintenanceController : to a ready replica\n(another one if it fails)
+MaintenanceController -> UpdateMaintenancePartUseCase : execute(...)
+UpdateMaintenancePartUseCase -> DBAM : apply the change to this replica's copy\n+ one copy per other replica in the outbox (same transaction)
+UpdateMaintenancePartUseCase --> MaintenanceController : updated
+MaintenanceController --> Actor : 200 OK
+OBAM -> PAM : PUT /internal/replicas/maintenance-parts\n(to every other replica; the latest change wins)
+PAM --> OBAM : 200 (applied if newer)
+== DELETE /api/maintenance/parts/{partNumber} ==
+Actor -> EAM : DELETE /api/maintenance/parts/{partNumber}\n(HTTPS, Authorization: Bearer JWT)
+EAM -> MaintenanceController : to a ready replica\n(another one if it fails)
+MaintenanceController -> DeleteMaintenancePartUseCase : execute(...)
+DeleteMaintenancePartUseCase -> DBAM : own maintenance records
+DeleteMaintenancePartUseCase -> PAM : GET /internal/replicas/maintenance-records\n(every peer in parallel)
+PAM --> DeleteMaintenancePartUseCase : their maintenance records
+alt the part is used by a maintenance record
+MaintenanceController --> Actor : 409 Conflict
+else
+DeleteMaintenancePartUseCase -> DBAM : delete + tombstone, and one deletion per other replica in the outbox\n(same transaction)
+MaintenanceController --> Actor : 204 No Content
+OBAM -> PAM : PUT /internal/replicas/maintenance-parts (deletion)\n(to every replica, retried until delivered)
+end
+== GET /api/maintenance/parts/search ==
+Actor -> EAM : GET /api/maintenance/parts/search\n(HTTPS, Authorization: Bearer JWT)
+EAM -> MaintenanceController : to a ready replica\n(another one if it fails)
+MaintenanceController -> SearchMaintenancePartUseCase : execute(...)
+SearchMaintenancePartUseCase -> DBAM : read maintenance parts
+note right of DBAM : catalog: complete on every replica
+DBAM --> SearchMaintenancePartUseCase : data
+SearchMaintenancePartUseCase --> MaintenanceController : result
+MaintenanceController --> Actor : 200 OK (X-Node-Id)
+@enduml

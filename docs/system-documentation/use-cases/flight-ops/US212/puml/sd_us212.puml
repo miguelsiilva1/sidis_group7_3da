@@ -1,0 +1,51 @@
+@startuml sd_us212
+skinparam backgroundColor #FFFFFF
+title US212 - Sequence Diagram: schedule a flight (Saga across three services, with compensations)
+
+autonumber
+skinparam defaultFontSize 16
+actor "ATCC" as c
+participant "flight-ops" as fo
+database "flights DB" as fdb
+participant "airports-routes" as ar
+participant "aircraft-maintenance" as am
+
+c -> fo : POST /api/flights {aircraft, origin, destination, times} (JWT)
+fo -> ar : C2 GET /internal/routes/{o}/{d}
+ar --> fo : status, min capacity and range, distance
+alt route missing (404) or not ACTIVE
+  fo --> c : 404 / 409
+end
+fo -> am : C1 GET /internal/aircrafts/{reg}
+am --> fo : status, seats, range
+alt aircraft missing, unavailable or incompatible
+  fo --> c : 404 / 409 (unavailable) / 400 (incompatible)
+end
+fo -> fo : overlapping flights of this aircraft?\n(every replica: FlightsAcrossReplicas)
+fo -> fdb : save flight PENDING
+
+fo -> am : C4 PUT /internal/flights/{id} (copy SCHEDULED)\nreserves the aircraft
+alt 409 (aircraft taken) or aircraft-maintenance down
+  fo -> fdb : flight CANCELED
+  fo --> c : 409 / 503
+end
+
+fo -> ar : C5 PUT /internal/flights/{id} (copy SCHEDULED)\nconfirms the route
+alt 404/409 (route gone or inactive) or airports-routes down
+  fo -> am : compensation: C4 PUT copy CANCELED (frees the aircraft)
+  note right
+    If it cannot be delivered, it is stored
+    and retried every 5 s (SagaCompensationService)
+  end note
+  fo -> fdb : flight CANCELED
+  fo --> c : 409 / 503
+end
+
+fo -> fdb : flight SCHEDULED
+fo --> c : 201
+
+note over fo, am
+  Each copy carries the flight's version: C4 and C5 are idempotent
+  (a repeated or older copy changes nothing), so a step can be retried.
+end note
+@enduml

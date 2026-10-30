@@ -1,0 +1,11 @@
+@startuml ssd_us229
+skinparam backgroundColor #FFFFFF
+title US229 - System Sequence Diagram
+autonumber
+actor "Backoffice Operator" as Actor
+participant "AISafe\nflight-ops\n(virtual IP 192.168.124.27, HTTPS)" as FO
+Actor -> FO : GET /api/flights/reports/utilization
+activate FO
+FO --> Actor : 200 OK
+deactivate FO
+@enduml

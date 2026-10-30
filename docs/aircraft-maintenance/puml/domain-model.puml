@@ -1,4 +1,5 @@
 @startuml domain-model
+skinparam backgroundColor #FFFFFF
 title aircraft-maintenance - Domain model
 
 hide empty methods

@@ -1,0 +1,29 @@
+@startuml sd_c2
+skinparam backgroundColor #FFFFFF
+title C2 - Route for flight-ops
+autonumber
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 240
+participant "flight-ops-n\n(replica of the caller)" as Caller
+participant "airports-routes-local\n(Envoy of the same machine)" as Entry
+box "airports-routes-k (a ready replica)" #F7F7F7
+participant "InternalController" as Ctrl
+participant "ViewRouteForServicesUseCase" as UC
+database "own database" as DB
+end box
+collections "peer replicas\nairports-routes-m" as Peers
+Caller -> Entry : GET /internal/routes/{origin}/{destination}\n(Authorization: actor's JWT or service token;\nX-Correlation-Id)
+Entry -> Ctrl : to a ready replica\n(another one if it fails)
+Ctrl -> UC : execute(...)
+UC -> DB : find route
+alt held here
+DB --> UC : found
+Ctrl --> Entry : 200 + fields
+else not held here
+Ctrl -> Peers : same GET, X-Peer-Forwarded (in parallel)
+Peers --> Ctrl : 200 from a holder (or 404 from all)
+Ctrl --> Entry : 200 (X-Data-Node) / 404
+end
+Entry --> Caller : answer
+note over Caller : no answer within 1 s (connect) or 10 s (read):\nthe caller answers its client 503
+@enduml

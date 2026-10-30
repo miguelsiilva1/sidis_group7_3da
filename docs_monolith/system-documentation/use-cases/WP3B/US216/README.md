@@ -29,11 +29,11 @@
 
 ## Alternative / Exception Flows
 
-| Step | Condition                         | System Response |
-| ---- | --------------------------------- | --------------- |
-| 1    | Origin equals destination         | HTTP 400 Bad Request |
-| 2    | One or both airports not found    | HTTP 404 Not Found |
-| 4    | No alternative paths exist        | HTTP 200 OK (Empty List) |
+| Step | Condition                      | System Response          |
+| ---- | ------------------------------ | ------------------------ |
+| 1    | Origin equals destination      | HTTP 400 Bad Request     |
+| 2    | One or both airports not found | HTTP 404 Not Found       |
+| 4    | No alternative paths exist     | HTTP 200 OK (Empty List) |
 
 ## Design Justification
 

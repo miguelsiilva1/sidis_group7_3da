@@ -1,0 +1,28 @@
+@startuml sd_us214
+skinparam backgroundColor #FFFFFF
+title US214 - Sequence Diagram
+autonumber
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 260
+actor "ATCC" as Actor
+participant "Entry (Envoy)\nvirtual IP of airports-routes" as EAR
+box "airports-routes-n (the replica that answers)" #F7F7F7
+participant "RouteController" as RouteController
+participant "ListActiveRoutesUseCase" as ListActiveRoutesUseCase
+database "own database" as DBAR
+end box
+collections "peer replicas\nairports-routes-m" as PAR
+== GET /api/routes?status=active&sortBy={popularity|distance} ==
+Actor -> EAR : GET /api/routes?status=active&sortBy={popularity|distance}\n(HTTPS, Authorization: Bearer JWT)
+EAR -> RouteController : to a ready replica\n(another one if it fails)
+RouteController -> ListActiveRoutesUseCase : execute(...)
+ListActiveRoutesUseCase -> DBAR : own routes
+ListActiveRoutesUseCase -> PAR : GET /internal/replicas/routes\n(every peer in parallel)
+PAR --> ListActiveRoutesUseCase : their routes
+ListActiveRoutesUseCase -> DBAR : own copies of the flights (sent by flight-ops)
+ListActiveRoutesUseCase -> PAR : GET /internal/replicas/flight-copies\n(every peer in parallel)
+PAR --> ListActiveRoutesUseCase : their copies of the flights (sent by flight-ops)
+ListActiveRoutesUseCase -> ListActiveRoutesUseCase : keep the latest change of each record,\nleave out deleted ones; filter, compute, sort, page
+ListActiveRoutesUseCase --> RouteController : result
+RouteController --> Actor : 200 OK (X-Node-Id; X-Partial-Result if both holders of a record were unreachable)
+@enduml

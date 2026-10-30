@@ -1,0 +1,32 @@
+@startuml sd_us222
+skinparam backgroundColor #FFFFFF
+title US222 - Sequence Diagram
+autonumber
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 260
+actor "Maintenance Supervisor" as Actor
+participant "Entry (Envoy)\nvirtual IP of aircraft-maintenance" as EAM
+box "aircraft-maintenance-n (the replica that answers)" #F7F7F7
+participant "MaintenanceController" as MaintenanceController
+participant "ViewMaintenanceDueAircraftUseCase" as ViewMaintenanceDueAircraftUseCase
+database "own database" as DBAM
+end box
+collections "peer replicas\naircraft-maintenance-m" as PAM
+== GET /api/maintenance/records/due ==
+Actor -> EAM : GET /api/maintenance/records/due\n(HTTPS, Authorization: Bearer JWT)
+EAM -> MaintenanceController : to a ready replica\n(another one if it fails)
+MaintenanceController -> ViewMaintenanceDueAircraftUseCase : execute(...)
+ViewMaintenanceDueAircraftUseCase -> DBAM : own aircraft
+ViewMaintenanceDueAircraftUseCase -> PAM : GET /internal/replicas/aircrafts\n(every peer in parallel)
+PAM --> ViewMaintenanceDueAircraftUseCase : their aircraft
+ViewMaintenanceDueAircraftUseCase -> DBAM : own copies of the flights (sent by flight-ops)
+ViewMaintenanceDueAircraftUseCase -> PAM : GET /internal/replicas/flight-copies\n(every peer in parallel)
+PAM --> ViewMaintenanceDueAircraftUseCase : their copies of the flights (sent by flight-ops)
+ViewMaintenanceDueAircraftUseCase -> DBAM : own maintenance records
+ViewMaintenanceDueAircraftUseCase -> PAM : GET /internal/replicas/maintenance-records\n(every peer in parallel)
+PAM --> ViewMaintenanceDueAircraftUseCase : their maintenance records
+ViewMaintenanceDueAircraftUseCase -> DBAM : maintenance templates (catalog, complete here)
+ViewMaintenanceDueAircraftUseCase -> ViewMaintenanceDueAircraftUseCase : keep the latest change of each record,\nleave out deleted ones; filter, compute, sort, page
+ViewMaintenanceDueAircraftUseCase --> MaintenanceController : result
+MaintenanceController --> Actor : 200 OK (X-Node-Id; X-Partial-Result if both holders of a record were unreachable)
+@enduml

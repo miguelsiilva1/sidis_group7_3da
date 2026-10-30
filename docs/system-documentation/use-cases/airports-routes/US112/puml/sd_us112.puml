@@ -1,0 +1,49 @@
+@startuml sd_us112
+skinparam backgroundColor #FFFFFF
+title US112 - Sequence Diagram
+autonumber
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 260
+actor "ATCC" as Actor
+participant "Entry (Envoy)\nvirtual IP of airports-routes" as EAR
+box "airports-routes-n (the replica that answers)" #F7F7F7
+participant "RouteController" as RouteController
+participant "UpdateRouteUseCase" as UpdateRouteUseCase
+participant "DeactivateRouteUseCase" as DeactivateRouteUseCase
+database "own database" as DBAR
+participant "Outbox dispatcher" as OBAR
+end box
+collections "peer replicas\nairports-routes-m" as PAR
+== PUT /api/routes/{origin}/{destination} ==
+Actor -> EAR : PUT /api/routes/{origin}/{destination}\n(HTTPS, Authorization: Bearer JWT)
+EAR -> RouteController : to a ready replica\n(another one if it fails)
+RouteController -> UpdateRouteUseCase : execute(...)
+UpdateRouteUseCase -> DBAR : find route
+alt held by this replica
+UpdateRouteUseCase -> DBAR : check version, apply the change\n+ copy for the other holder in the outbox (same transaction)
+UpdateRouteUseCase --> RouteController : updated
+RouteController --> Actor : 200 OK
+OBAR -> PAR : PUT /internal/replicas/routes\n(to the other holder, retried until delivered)
+else not held here
+RouteController -> PAR : same PUT, X-Peer-Forwarded\n(to the peers one at a time, until a holder answers)
+PAR --> RouteController : 200 from the holder
+RouteController --> Actor : 200 OK (X-Data-Node)
+note over PAR : the holder copies the change\nto the other holder
+end
+== PATCH /api/routes/{origin}/{destination}/deactivate ==
+Actor -> EAR : PATCH /api/routes/{origin}/{destination}/deactivate\n(HTTPS, Authorization: Bearer JWT)
+EAR -> RouteController : to a ready replica\n(another one if it fails)
+RouteController -> DeactivateRouteUseCase : execute(...)
+DeactivateRouteUseCase -> DBAR : find route
+alt held by this replica
+DeactivateRouteUseCase -> DBAR : check version, apply the change\n+ copy for the other holder in the outbox (same transaction)
+DeactivateRouteUseCase --> RouteController : updated
+RouteController --> Actor : 200 OK
+OBAR -> PAR : PUT /internal/replicas/routes\n(to the other holder, retried until delivered)
+else not held here
+RouteController -> PAR : same PATCH, X-Peer-Forwarded\n(to the peers one at a time, until a holder answers)
+PAR --> RouteController : 200 from the holder
+RouteController --> Actor : 200 OK (X-Data-Node)
+note over PAR : the holder copies the change\nto the other holder
+end
+@enduml

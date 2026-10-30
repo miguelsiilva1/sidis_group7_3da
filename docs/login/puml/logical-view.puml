@@ -1,4 +1,5 @@
 @startuml logical-view
+skinparam backgroundColor #FFFFFF
 title login - Logical view, level 1 (UML components)
 
 skinparam componentStyle uml2

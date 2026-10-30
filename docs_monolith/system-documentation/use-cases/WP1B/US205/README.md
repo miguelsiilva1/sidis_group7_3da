@@ -29,9 +29,9 @@
 
 ## Alternative / Exception Flows
 
-| Step | Condition              | System Response                                |
-| ---- | ---------------------- | ---------------------------------------------- |
-| 2    | No aircraft registered | HTTP 200 with all groups empty (count 0 each)  |
+| Step | Condition              | System Response                               |
+| ---- | ---------------------- | --------------------------------------------- |
+| 2    | No aircraft registered | HTTP 200 with all groups empty (count 0 each) |
 
 ## Design Justification
 

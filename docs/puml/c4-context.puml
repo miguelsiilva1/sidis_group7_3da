@@ -1,4 +1,5 @@
 @startuml c4-context
+skinparam backgroundColor #FFFFFF
 !include <C4/C4_Context>
 skinparam defaultFontSize 16
 

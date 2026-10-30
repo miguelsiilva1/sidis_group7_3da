@@ -1,4 +1,5 @@
 @startuml sd_c4_reserve_aircraft
+skinparam backgroundColor #FFFFFF
 title Scenario: C4 copy of a flight (the "reserve the aircraft" step of the scheduling Saga)
 
 autonumber

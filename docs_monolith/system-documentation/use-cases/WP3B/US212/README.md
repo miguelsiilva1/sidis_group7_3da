@@ -33,14 +33,14 @@
 
 ## Alternative / Exception Flows
 
-| Step | Condition                         | System Response |
-| ---- | --------------------------------- | --------------- |
-| 2    | Route or Aircraft not found       | HTTP 404 Not Found |
-| 3    | Route distance > Aircraft range   | HTTP 400 Bad Request (Business Rule Violation) |
-| 3    | Aircraft range < Route minimum    | HTTP 400 Bad Request (Business Rule Violation) |
-| 3    | Seating capacity < Route minimum  | HTTP 400 Bad Request (Business Rule Violation) |
-| 3    | Aircraft is under maintenance/inactive | HTTP 409 Conflict (Aircraft Unavailable) |
-| 3    | Aircraft schedule overlaps        | HTTP 409 Conflict (Aircraft Unavailable) |
+| Step | Condition                              | System Response                                |
+| ---- | -------------------------------------- | ---------------------------------------------- |
+| 2    | Route or Aircraft not found            | HTTP 404 Not Found                             |
+| 3    | Route distance > Aircraft range        | HTTP 400 Bad Request (Business Rule Violation) |
+| 3    | Aircraft range < Route minimum         | HTTP 400 Bad Request (Business Rule Violation) |
+| 3    | Seating capacity < Route minimum       | HTTP 400 Bad Request (Business Rule Violation) |
+| 3    | Aircraft is under maintenance/inactive | HTTP 409 Conflict (Aircraft Unavailable)       |
+| 3    | Aircraft schedule overlaps             | HTTP 409 Conflict (Aircraft Unavailable)       |
 
 ## Design Justification
 

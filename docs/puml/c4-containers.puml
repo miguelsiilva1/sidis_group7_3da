@@ -1,4 +1,5 @@
 @startuml c4-containers
+skinparam backgroundColor #FFFFFF
 !include <C4/C4_Container>
 skinparam defaultFontSize 16
 skinparam wrapWidth 260

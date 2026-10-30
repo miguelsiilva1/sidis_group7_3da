@@ -1,0 +1,41 @@
+@startuml ssd_us225
+skinparam backgroundColor #FFFFFF
+title US225 - System Sequence Diagram
+autonumber
+actor "Backoffice Operator" as Actor
+participant "AISafe\naircraft-maintenance\n(virtual IP 192.168.124.25, HTTPS)" as AM
+participant "AISafe\nairports-routes\n(virtual IP 192.168.124.26, HTTPS)" as AR
+participant "AISafe\nflight-ops\n(virtual IP 192.168.124.27, HTTPS)" as FO
+Actor -> AM : POST /api/aircraftModels/import
+activate AM
+AM --> Actor : 201 Created, or 207 Multi-Status (result of each row)
+deactivate AM
+Actor -> AM : POST /api/aircrafts/import
+activate AM
+AM --> Actor : 201 Created, or 207 Multi-Status (result of each row)
+deactivate AM
+Actor -> AM : POST /api/maintenance/templates/import
+activate AM
+AM --> Actor : 201 Created, or 207 Multi-Status (result of each row)
+deactivate AM
+Actor -> AM : POST /api/maintenance/parts/import
+activate AM
+AM --> Actor : 201 Created, or 207 Multi-Status (result of each row)
+deactivate AM
+Actor -> AM : POST /api/maintenance/records/import
+activate AM
+AM --> Actor : 201 Created, or 207 Multi-Status (result of each row)
+deactivate AM
+Actor -> AR : POST /api/airports/import
+activate AR
+AR --> Actor : 201 Created, or 207 Multi-Status (result of each row)
+deactivate AR
+Actor -> AR : POST /api/routes/import
+activate AR
+AR --> Actor : 201 Created, or 207 Multi-Status (result of each row)
+deactivate AR
+Actor -> FO : POST /api/flights/import
+activate FO
+FO --> Actor : 201 Created, or 207 Multi-Status (result of each row)
+deactivate FO
+@enduml

@@ -1,0 +1,25 @@
+@startuml sd_us117
+skinparam backgroundColor #FFFFFF
+title US117 - Sequence Diagram
+autonumber
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 260
+actor "ATCC" as Actor
+participant "Entry (Envoy)\nvirtual IP of aircraft-maintenance" as EAM
+box "aircraft-maintenance-n (the replica that answers)" #F7F7F7
+participant "MaintenanceController" as MaintenanceController
+participant "ViewTotalMaintenanceHoursInFleetUseCase" as ViewTotalMaintenanceHoursInFleetUseCase
+database "own database" as DBAM
+end box
+collections "peer replicas\naircraft-maintenance-m" as PAM
+== GET /api/maintenance/records/hours ==
+Actor -> EAM : GET /api/maintenance/records/hours\n(HTTPS, Authorization: Bearer JWT)
+EAM -> MaintenanceController : to a ready replica\n(another one if it fails)
+MaintenanceController -> ViewTotalMaintenanceHoursInFleetUseCase : execute(...)
+ViewTotalMaintenanceHoursInFleetUseCase -> DBAM : own maintenance records
+ViewTotalMaintenanceHoursInFleetUseCase -> PAM : GET /internal/replicas/maintenance-records\n(every peer in parallel)
+PAM --> ViewTotalMaintenanceHoursInFleetUseCase : their maintenance records
+ViewTotalMaintenanceHoursInFleetUseCase -> ViewTotalMaintenanceHoursInFleetUseCase : keep the latest change of each record,\nleave out deleted ones; filter, compute, sort, page
+ViewTotalMaintenanceHoursInFleetUseCase --> MaintenanceController : result
+MaintenanceController --> Actor : 200 OK (X-Node-Id; X-Partial-Result if both holders of a record were unreachable)
+@enduml

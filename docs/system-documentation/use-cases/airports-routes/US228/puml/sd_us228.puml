@@ -1,0 +1,26 @@
+@startuml sd_us228
+skinparam backgroundColor #FFFFFF
+title US228 - Sequence Diagram
+autonumber
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 260
+actor "Backoffice Operator" as Actor
+participant "Entry (Envoy)\nvirtual IP of airports-routes" as EAR
+box "airports-routes-n (the replica that answers)" #F7F7F7
+participant "RouteController" as RouteController
+participant "ExportRouteNetworkUseCase" as ExportRouteNetworkUseCase
+database "own database" as DBAR
+end box
+collections "peer replicas\nairports-routes-m" as PAR
+== GET /api/routes/export?format={geojson|kml} ==
+Actor -> EAR : GET /api/routes/export?format={geojson|kml}\n(HTTPS, Authorization: Bearer JWT)
+EAR -> RouteController : to a ready replica\n(another one if it fails)
+RouteController -> ExportRouteNetworkUseCase : execute(...)
+ExportRouteNetworkUseCase -> DBAR : own routes
+ExportRouteNetworkUseCase -> PAR : GET /internal/replicas/routes\n(every peer in parallel)
+PAR --> ExportRouteNetworkUseCase : their routes
+ExportRouteNetworkUseCase -> DBAR : airports (catalog, complete here)
+ExportRouteNetworkUseCase -> ExportRouteNetworkUseCase : keep the latest change of each record,\nleave out deleted ones; filter, compute, sort, page
+ExportRouteNetworkUseCase --> RouteController : result
+RouteController --> Actor : 200 OK (X-Node-Id; X-Partial-Result if both holders of a record were unreachable)
+@enduml

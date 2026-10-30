@@ -1,0 +1,81 @@
+@startuml ucd_aircraft_maintenance
+skinparam backgroundColor #FFFFFF
+title Use cases of aircraft-maintenance
+left to right direction
+skinparam packageStyle rectangle
+skinparam actorStyle awesome
+actor "Backoffice Operator" as BACKOFFICE_OPERATOR
+actor "ATCC" as ATCC
+actor "Maintenance Technician" as MAINTENANCE_TECHNICIAN
+actor "Maintenance Supervisor" as MAINTENANCE_SUPERVISOR
+rectangle "aircraft-maintenance (3 replicas, behind its virtual IP)" {
+  usecase "US101\nRegister Aircraft Model" as US101
+  usecase "US102\nRegister Aircraft" as US102
+  usecase "US103\nView Aircraft Details" as US103
+  usecase "US104\nSearch Aircraft" as US104
+  usecase "US105\nUpdate Aircraft Status" as US105
+  usecase "US201\nUpdate Aircraft Model Details" as US201
+  usecase "US202\nRegister Aircraft Model with Optional Image" as US202
+  usecase "US204\nTop 5 Most Utilized Aircraft Models" as US204
+  usecase "US205\nView Fleet Status" as US205
+  usecase "US206\nCalculate Total Operational Hours" as US206
+  usecase "US115a\nCreate a Maintenance Record" as US115a
+  usecase "US115b\nCreate Maintenance Templates" as US115b
+  usecase "US116\nView All Maintenance Records for Aircraft" as US116
+  usecase "US117\nView Total Maintenance Hours for the Fleet" as US117
+  usecase "US119\nUpdate Maintenance Record" as US119
+  usecase "US222\nAlert when Aircraft is Due for Scheduled Maintenance" as US222
+  usecase "US226\nTrack Maintenance Parts Inventory and Alerts" as US226
+  usecase "US217\nCategorize Maintenance Records by Component" as US217
+  usecase "US218\nSearch Maintenance Records" as US218
+  usecase "US219\nView Ongoing Maintenance Activities" as US219
+  usecase "US220\nGenerate Maintenance Cost Reports" as US220
+  usecase "US221\nView Average Maintenance Turnaround Time by Model" as US221
+  usecase "US223\nAircraft Utilization Rates Graphs" as US223
+  usecase "US225\nImport Bulk Data (CSV)" as US225
+}
+BACKOFFICE_OPERATOR --> US101
+ATCC --> US102
+BACKOFFICE_OPERATOR --> US103
+ATCC --> US103
+ATCC --> US104
+BACKOFFICE_OPERATOR --> US105
+BACKOFFICE_OPERATOR --> US201
+BACKOFFICE_OPERATOR --> US202
+ATCC --> US202
+BACKOFFICE_OPERATOR --> US204
+BACKOFFICE_OPERATOR --> US205
+ATCC --> US205
+ATCC --> US206
+MAINTENANCE_TECHNICIAN --> US115a
+MAINTENANCE_TECHNICIAN --> US115b
+MAINTENANCE_TECHNICIAN --> US116
+ATCC --> US116
+ATCC --> US117
+MAINTENANCE_TECHNICIAN --> US119
+MAINTENANCE_SUPERVISOR --> US222
+MAINTENANCE_TECHNICIAN --> US222
+ATCC --> US222
+MAINTENANCE_TECHNICIAN --> US226
+MAINTENANCE_SUPERVISOR --> US226
+ATCC --> US226
+MAINTENANCE_TECHNICIAN --> US217
+MAINTENANCE_SUPERVISOR --> US217
+ATCC --> US217
+MAINTENANCE_TECHNICIAN --> US218
+MAINTENANCE_SUPERVISOR --> US218
+ATCC --> US218
+MAINTENANCE_SUPERVISOR --> US219
+MAINTENANCE_TECHNICIAN --> US219
+ATCC --> US219
+ATCC --> US220
+BACKOFFICE_OPERATOR --> US220
+MAINTENANCE_SUPERVISOR --> US220
+MAINTENANCE_SUPERVISOR --> US221
+MAINTENANCE_TECHNICIAN --> US221
+ATCC --> US221
+ATCC --> US223
+BACKOFFICE_OPERATOR --> US225
+MAINTENANCE_TECHNICIAN --> US225
+MAINTENANCE_SUPERVISOR --> US225
+@enduml

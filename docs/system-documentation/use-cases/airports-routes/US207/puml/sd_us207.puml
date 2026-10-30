@@ -1,0 +1,46 @@
+@startuml sd_us207
+skinparam backgroundColor #FFFFFF
+title US207 - Sequence Diagram
+autonumber
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 260
+actor "Backoffice Operator" as Actor
+participant "Entry (Envoy)\nvirtual IP of airports-routes" as EAR
+box "airports-routes-n (the replica that answers)" #F7F7F7
+participant "AirportController" as AirportController
+participant "RegisterAirportUseCase" as RegisterAirportUseCase
+participant "UploadAirportPhotoUseCase" as UploadAirportPhotoUseCase
+participant "GetAirportPhotoUseCase" as GetAirportPhotoUseCase
+database "own database" as DBAR
+participant "Outbox dispatcher" as OBAR
+end box
+collections "peer replicas\nairports-routes-m" as PAR
+== POST /api/airports ==
+Actor -> EAR : POST /api/airports\n(HTTPS, Authorization: Bearer JWT)
+EAR -> AirportController : to a ready replica\n(another one if it fails)
+AirportController -> RegisterAirportUseCase : execute(...)
+RegisterAirportUseCase -> DBAR : IATA code already in the catalog?
+RegisterAirportUseCase -> DBAR : save airport + one copy per other replica in the outbox\n(same transaction)
+RegisterAirportUseCase --> AirportController : created
+AirportController --> Actor : 201 Created
+OBAR -> PAR : PUT /internal/replicas/airports\n(to every other replica, retried until delivered)
+PAR --> OBAR : 200 (applied if newer)
+== POST /api/airports/{iataCode}/photos ==
+Actor -> EAR : POST /api/airports/{iataCode}/photos\n(HTTPS, Authorization: Bearer JWT)
+EAR -> AirportController : to a ready replica\n(another one if it fails)
+AirportController -> UploadAirportPhotoUseCase : execute(...)
+UploadAirportPhotoUseCase -> DBAR : apply the change to this replica's copy\n+ one copy per other replica in the outbox (same transaction)
+UploadAirportPhotoUseCase --> AirportController : updated
+AirportController --> Actor : 200 OK
+OBAR -> PAR : PUT /internal/replicas/airports\n(to every other replica; the latest change wins)
+PAR --> OBAR : 200 (applied if newer)
+== GET /api/airports/{iataCode}/photos/{index} ==
+Actor -> EAR : GET /api/airports/{iataCode}/photos/{index}\n(HTTPS, Authorization: Bearer JWT)
+EAR -> AirportController : to a ready replica\n(another one if it fails)
+AirportController -> GetAirportPhotoUseCase : execute(...)
+GetAirportPhotoUseCase -> DBAR : read airports
+note right of DBAR : catalog: complete on every replica
+DBAR --> GetAirportPhotoUseCase : data
+GetAirportPhotoUseCase --> AirportController : result
+AirportController --> Actor : 200 OK (X-Node-Id)
+@enduml

@@ -1,0 +1,25 @@
+@startuml sd_us104
+skinparam backgroundColor #FFFFFF
+title US104 - Sequence Diagram
+autonumber
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 260
+actor "ATCC" as Actor
+participant "Entry (Envoy)\nvirtual IP of aircraft-maintenance" as EAM
+box "aircraft-maintenance-n (the replica that answers)" #F7F7F7
+participant "AircraftController" as AircraftController
+participant "SearchAircraftUseCase" as SearchAircraftUseCase
+database "own database" as DBAM
+end box
+collections "peer replicas\naircraft-maintenance-m" as PAM
+== GET /api/aircrafts/search ==
+Actor -> EAM : GET /api/aircrafts/search\n(HTTPS, Authorization: Bearer JWT)
+EAM -> AircraftController : to a ready replica\n(another one if it fails)
+AircraftController -> SearchAircraftUseCase : execute(...)
+SearchAircraftUseCase -> DBAM : own aircraft
+SearchAircraftUseCase -> PAM : GET /internal/replicas/aircrafts\n(every peer in parallel)
+PAM --> SearchAircraftUseCase : their aircraft
+SearchAircraftUseCase -> SearchAircraftUseCase : keep the latest change of each record,\nleave out deleted ones; filter, compute, sort, page
+SearchAircraftUseCase --> AircraftController : result
+AircraftController --> Actor : 200 OK (X-Node-Id; X-Partial-Result if both holders of a record were unreachable)
+@enduml

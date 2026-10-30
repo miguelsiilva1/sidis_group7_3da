@@ -1,0 +1,29 @@
+@startuml sd_us106a
+skinparam backgroundColor #FFFFFF
+title US106a - Sequence Diagram
+autonumber
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 260
+actor "Backoffice Operator" as Actor
+participant "Entry (Envoy)\nvirtual IP of airports-routes" as EAR
+box "airports-routes-n (the replica that answers)" #F7F7F7
+participant "AirportController" as AirportController
+participant "AddAirportCertificationUseCase" as AddAirportCertificationUseCase
+database "own database" as DBAR
+participant "Outbox dispatcher" as OBAR
+end box
+collections "peer replicas\nairports-routes-m" as PAR
+participant "aircraft-maintenance\n(through aircraft-maintenance-local)" as OAM
+== POST /api/airports/{iataCode}/certifications ==
+Actor -> EAR : POST /api/airports/{iataCode}/certifications\n(HTTPS, Authorization: Bearer JWT)
+EAR -> AirportController : to a ready replica\n(another one if it fails)
+AirportController -> AddAirportCertificationUseCase : execute(...)
+AddAirportCertificationUseCase -> OAM : C3: GET /internal/aircraft-models/{name}\n(the actor's token)
+OAM --> AddAirportCertificationUseCase : 200 whether the model exists
+AddAirportCertificationUseCase -> DBAR : airport and aircraft model already in the catalog?
+AddAirportCertificationUseCase -> DBAR : save aircraft certification + one copy per other replica in the outbox\n(same transaction)
+AddAirportCertificationUseCase --> AirportController : created
+AirportController --> Actor : 201 Created
+OBAR -> PAR : PUT /internal/replicas/aircraft-certifications\n(to every other replica, retried until delivered)
+PAR --> OBAR : 200 (applied if newer)
+@enduml

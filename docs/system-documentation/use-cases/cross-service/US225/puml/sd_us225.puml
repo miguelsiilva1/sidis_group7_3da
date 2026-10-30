@@ -1,0 +1,112 @@
+@startuml sd_us225
+skinparam backgroundColor #FFFFFF
+title US225 - Sequence Diagram
+autonumber
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 260
+actor "Backoffice Operator" as Actor
+participant "Entry (Envoy)\nvirtual IP of aircraft-maintenance" as EAM
+box "aircraft-maintenance-n (the replica that answers)" #F7F7F7
+participant "AircraftModelController" as AircraftModelController
+participant "AircraftController" as AircraftController
+participant "MaintenanceController" as MaintenanceController
+participant "ImportAircraftModelsUseCase" as ImportAircraftModelsUseCase
+participant "ImportAircraftsUseCase" as ImportAircraftsUseCase
+participant "ImportMaintenanceTemplatesUseCase" as ImportMaintenanceTemplatesUseCase
+participant "ImportMaintenancePartsUseCase" as ImportMaintenancePartsUseCase
+participant "ImportMaintenanceRecordsUseCase" as ImportMaintenanceRecordsUseCase
+database "own database" as DBAM
+participant "Outbox dispatcher" as OBAM
+end box
+collections "peer replicas\naircraft-maintenance-m" as PAM
+participant "Entry (Envoy)\nvirtual IP of airports-routes" as EAR
+box "airports-routes-n (the replica that answers)" #F7F7F7
+participant "AirportController" as AirportController
+participant "RouteController" as RouteController
+participant "ImportAirportsUseCase" as ImportAirportsUseCase
+participant "ImportRoutesUseCase" as ImportRoutesUseCase
+database "own database" as DBAR
+participant "Outbox dispatcher" as OBAR
+end box
+collections "peer replicas\nairports-routes-m" as PAR
+participant "Entry (Envoy)\nvirtual IP of flight-ops" as EFO
+box "flight-ops-n (the replica that answers)" #F7F7F7
+participant "FlightController" as FlightController
+participant "ImportFlightsUseCase" as ImportFlightsUseCase
+database "own database" as DBFO
+participant "Outbox dispatcher" as OBFO
+end box
+collections "peer replicas\nflight-ops-m" as PFO
+== POST /api/aircraftModels/import ==
+Actor -> EAM : POST /api/aircraftModels/import\n(HTTPS, Authorization: Bearer JWT)
+EAM -> AircraftModelController : to a ready replica\n(another one if it fails)
+AircraftModelController -> ImportAircraftModelsUseCase : execute(...)
+loop each row of the CSV file
+ImportAircraftModelsUseCase -> ImportAircraftModelsUseCase : RegisterAircraftModelUseCase.execute(row)\n(stored, and copied to every replica by the outbox)
+end
+ImportAircraftModelsUseCase --> AircraftModelController : rows created, row errors
+AircraftModelController --> Actor : 201, or 207 with the result of each row
+== POST /api/aircrafts/import ==
+Actor -> EAM : POST /api/aircrafts/import\n(HTTPS, Authorization: Bearer JWT)
+EAM -> AircraftController : to a ready replica\n(another one if it fails)
+AircraftController -> ImportAircraftsUseCase : execute(...)
+loop each row of the CSV file
+ImportAircraftsUseCase -> ImportAircraftsUseCase : RegisterAircraftUseCase.execute(row)\n(stored here, and copied to the next replica by the outbox)
+end
+ImportAircraftsUseCase --> AircraftController : rows created, row errors
+AircraftController --> Actor : 201, or 207 with the result of each row
+== POST /api/maintenance/templates/import ==
+Actor -> EAM : POST /api/maintenance/templates/import\n(HTTPS, Authorization: Bearer JWT)
+EAM -> MaintenanceController : to a ready replica\n(another one if it fails)
+MaintenanceController -> ImportMaintenanceTemplatesUseCase : execute(...)
+loop each row of the CSV file
+ImportMaintenanceTemplatesUseCase -> ImportMaintenanceTemplatesUseCase : CreateMaintenanceTemplateUseCase.execute(row)\n(stored, and copied to every replica by the outbox)
+end
+ImportMaintenanceTemplatesUseCase --> MaintenanceController : rows created, row errors
+MaintenanceController --> Actor : 201, or 207 with the result of each row
+== POST /api/maintenance/parts/import ==
+Actor -> EAM : POST /api/maintenance/parts/import\n(HTTPS, Authorization: Bearer JWT)
+EAM -> MaintenanceController : to a ready replica\n(another one if it fails)
+MaintenanceController -> ImportMaintenancePartsUseCase : execute(...)
+loop each row of the CSV file
+ImportMaintenancePartsUseCase -> ImportMaintenancePartsUseCase : CreateMaintenancePartUseCase.execute(row)\n(stored, and copied to every replica by the outbox)
+end
+ImportMaintenancePartsUseCase --> MaintenanceController : rows created, row errors
+MaintenanceController --> Actor : 201, or 207 with the result of each row
+== POST /api/maintenance/records/import ==
+Actor -> EAM : POST /api/maintenance/records/import\n(HTTPS, Authorization: Bearer JWT)
+EAM -> MaintenanceController : to a ready replica\n(another one if it fails)
+MaintenanceController -> ImportMaintenanceRecordsUseCase : execute(...)
+loop each row of the CSV file
+ImportMaintenanceRecordsUseCase -> ImportMaintenanceRecordsUseCase : CreateMaintenanceRecordUseCase.execute(row)\n(stored here, and copied to the next replica by the outbox)
+end
+ImportMaintenanceRecordsUseCase --> MaintenanceController : rows created, row errors
+MaintenanceController --> Actor : 201, or 207 with the result of each row
+== POST /api/airports/import ==
+Actor -> EAR : POST /api/airports/import\n(HTTPS, Authorization: Bearer JWT)
+EAR -> AirportController : to a ready replica\n(another one if it fails)
+AirportController -> ImportAirportsUseCase : execute(...)
+loop each row of the CSV file
+ImportAirportsUseCase -> ImportAirportsUseCase : RegisterAirportUseCase.execute(row)\n(stored, and copied to every replica by the outbox)
+end
+ImportAirportsUseCase --> AirportController : rows created, row errors
+AirportController --> Actor : 201, or 207 with the result of each row
+== POST /api/routes/import ==
+Actor -> EAR : POST /api/routes/import\n(HTTPS, Authorization: Bearer JWT)
+EAR -> RouteController : to a ready replica\n(another one if it fails)
+RouteController -> ImportRoutesUseCase : execute(...)
+loop each row of the CSV file
+ImportRoutesUseCase -> ImportRoutesUseCase : CreateRouteUseCase.execute(row)\n(stored here, and copied to the next replica by the outbox)
+end
+ImportRoutesUseCase --> RouteController : rows created, row errors
+RouteController --> Actor : 201, or 207 with the result of each row
+== POST /api/flights/import ==
+Actor -> EFO : POST /api/flights/import\n(HTTPS, Authorization: Bearer JWT)
+EFO -> FlightController : to a ready replica\n(another one if it fails)
+FlightController -> ImportFlightsUseCase : execute(...)
+loop each row of the CSV file
+ImportFlightsUseCase -> ImportFlightsUseCase : ScheduleFlightUseCase.execute(row)\n(the whole scheduling Saga: C2, C1, C4, C5)
+end
+ImportFlightsUseCase --> FlightController : rows created, row errors
+FlightController --> Actor : 201, or 207 with the result of each row
+@enduml

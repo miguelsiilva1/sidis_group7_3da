@@ -29,10 +29,10 @@
 
 ## Alternative / Exception Flows
 
-| Step | Condition                         | System Response |
-| ---- | --------------------------------- | --------------- |
-| 1    | Invalid `sortBy` parameter        | HTTP 400 Bad Request |
-| 3    | Associated Airport missing/deleted| HTTP 500 Internal Server Error (Data integrity issue) |
+| Step | Condition                          | System Response                                       |
+| ---- | ---------------------------------- | ----------------------------------------------------- |
+| 1    | Invalid `sortBy` parameter         | HTTP 400 Bad Request                                  |
+| 3    | Associated Airport missing/deleted | HTTP 500 Internal Server Error (Data integrity issue) |
 
 ## Design Justification
 

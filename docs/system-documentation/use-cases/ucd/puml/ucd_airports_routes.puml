@@ -1,0 +1,61 @@
+@startuml ucd_airports_routes
+skinparam backgroundColor #FFFFFF
+title Use cases of airports-routes
+left to right direction
+skinparam packageStyle rectangle
+skinparam actorStyle awesome
+actor "ATCC" as ATCC
+actor "Backoffice Operator" as BACKOFFICE_OPERATOR
+rectangle "airports-routes (3 replicas, behind its virtual IP)" {
+  usecase "US203\nView Compatible Routes for an Aircraft" as US203
+  usecase "US106\nRegister an Airport" as US106
+  usecase "US106a\nAdd Aircraft Certification to Airport" as US106a
+  usecase "US107\nView Airport Details" as US107
+  usecase "US108\nSearch for Airports" as US108
+  usecase "US109\nUpdate Airport Operational Status" as US109
+  usecase "US207\nRegister Airport with Optional Photo Upload" as US207
+  usecase "US208\nUpdate Airport Details" as US208
+  usecase "US209\nView Routes to/from an Airport" as US209
+  usecase "US210\nStatistics on Busiest Airports" as US210
+  usecase "US211\nView Airports Grouped by Region or Country" as US211
+  usecase "US110\nCreate a Flight Route" as US110
+  usecase "US111\nKeep Track of Route History" as US111
+  usecase "US112\nUpdate or Deactivate a Route" as US112
+  usecase "US113\nView Routes" as US113
+  usecase "US114\nSearch Routes" as US114
+  usecase "US214\nList Active Routes Sorted by Popularity or Distance" as US214
+  usecase "US215\nCalculate Total Network Distance" as US215
+  usecase "US216\nSearch Alternative Routes" as US216
+  usecase "US225\nImport Bulk Data (CSV)" as US225
+  usecase "US227\nCalculate Fuel Efficiency Metrics" as US227
+  usecase "US228\nExport route network data" as US228
+}
+ATCC --> US203
+BACKOFFICE_OPERATOR --> US106
+BACKOFFICE_OPERATOR --> US106a
+ATCC --> US106a
+BACKOFFICE_OPERATOR --> US107
+ATCC --> US107
+ATCC --> US108
+BACKOFFICE_OPERATOR --> US108
+BACKOFFICE_OPERATOR --> US109
+BACKOFFICE_OPERATOR --> US207
+ATCC --> US207
+BACKOFFICE_OPERATOR --> US208
+ATCC --> US209
+BACKOFFICE_OPERATOR --> US210
+ATCC --> US211
+BACKOFFICE_OPERATOR --> US211
+ATCC --> US110
+ATCC --> US111
+ATCC --> US112
+BACKOFFICE_OPERATOR --> US112
+ATCC --> US113
+ATCC --> US114
+ATCC --> US214
+ATCC --> US215
+ATCC --> US216
+BACKOFFICE_OPERATOR --> US225
+ATCC --> US227
+BACKOFFICE_OPERATOR --> US228
+@enduml

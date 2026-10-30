@@ -1,0 +1,32 @@
+@startuml sd_us119
+skinparam backgroundColor #FFFFFF
+title US119 - Sequence Diagram
+autonumber
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 260
+actor "Maintenance Technician" as Actor
+participant "Entry (Envoy)\nvirtual IP of aircraft-maintenance" as EAM
+box "aircraft-maintenance-n (the replica that answers)" #F7F7F7
+participant "MaintenanceController" as MaintenanceController
+participant "UpdateMaintenanceRecordUseCase" as UpdateMaintenanceRecordUseCase
+database "own database" as DBAM
+participant "Outbox dispatcher" as OBAM
+end box
+collections "peer replicas\naircraft-maintenance-m" as PAM
+== PATCH /api/maintenance/records/{recordId} ==
+Actor -> EAM : PATCH /api/maintenance/records/{recordId}\n(HTTPS, Authorization: Bearer JWT)
+EAM -> MaintenanceController : to a ready replica\n(another one if it fails)
+MaintenanceController -> UpdateMaintenanceRecordUseCase : execute(...)
+UpdateMaintenanceRecordUseCase -> DBAM : find maintenance record
+alt held by this replica
+UpdateMaintenanceRecordUseCase -> DBAM : check version, apply the change\n+ copy for the other holder in the outbox (same transaction)
+UpdateMaintenanceRecordUseCase --> MaintenanceController : updated
+MaintenanceController --> Actor : 200 OK
+OBAM -> PAM : PUT /internal/replicas/maintenance-records\n(to the other holder, retried until delivered)
+else not held here
+MaintenanceController -> PAM : same PATCH, X-Peer-Forwarded\n(to the peers one at a time, until a holder answers)
+PAM --> MaintenanceController : 200 from the holder
+MaintenanceController --> Actor : 200 OK (X-Data-Node)
+note over PAM : the holder copies the change\nto the other holder
+end
+@enduml

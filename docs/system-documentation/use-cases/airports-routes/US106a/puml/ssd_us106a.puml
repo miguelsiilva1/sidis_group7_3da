@@ -1,0 +1,11 @@
+@startuml ssd_us106a
+skinparam backgroundColor #FFFFFF
+title US106a - System Sequence Diagram
+autonumber
+actor "Backoffice Operator" as Actor
+participant "AISafe\nairports-routes\n(virtual IP 192.168.124.26, HTTPS)" as AR
+Actor -> AR : POST /api/airports/{iataCode}/certifications
+activate AR
+AR --> Actor : 201 Created
+deactivate AR
+@enduml

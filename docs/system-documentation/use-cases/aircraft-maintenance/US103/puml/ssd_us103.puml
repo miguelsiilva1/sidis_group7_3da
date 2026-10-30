@@ -1,0 +1,23 @@
+@startuml ssd_us103
+skinparam backgroundColor #FFFFFF
+title US103 - System Sequence Diagram
+autonumber
+actor "Backoffice Operator" as Actor
+participant "AISafe\naircraft-maintenance\n(virtual IP 192.168.124.25, HTTPS)" as AM
+Actor -> AM : GET /api/aircrafts/{registration}
+activate AM
+AM --> Actor : 200 OK
+deactivate AM
+Actor -> AM : GET /api/aircrafts
+activate AM
+AM --> Actor : 200 OK
+deactivate AM
+Actor -> AM : GET /api/aircraftModels/{modelName}
+activate AM
+AM --> Actor : 200 OK
+deactivate AM
+Actor -> AM : GET /api/aircraftModels
+activate AM
+AM --> Actor : 200 OK
+deactivate AM
+@enduml

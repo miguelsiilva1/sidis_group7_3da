@@ -28,9 +28,9 @@
 
 ## Alternative / Exception Flows
 
-| Step | Condition                         | System Response |
-| ---- | --------------------------------- | --------------- |
-| 2    | No routes exist in the network    | HTTP 200 OK (Total = 0) |
+| Step | Condition                      | System Response         |
+| ---- | ------------------------------ | ----------------------- |
+| 2    | No routes exist in the network | HTTP 200 OK (Total = 0) |
 
 ## Design Justification
 
