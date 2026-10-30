@@ -118,6 +118,9 @@ spec:
             # not by H2 as soon as the replica is told to stop: requests still being answered need it.
             - name: DB_URL
               value: jdbc:h2:file:/data/aircraft-maintenance;DB_CLOSE_ON_EXIT=FALSE
+            # The audit trail (who did what, with what result), next to the database
+            - name: AISAFE_AUDIT_FILE
+              value: /data/audit.log
           volumeMounts:
             - name: data
               mountPath: /data
@@ -304,6 +307,8 @@ spec:
             # not by H2 as soon as the replica is told to stop: requests still being answered need it.
             - name: DB_URL
               value: jdbc:h2:file:/data/airports-routes;DB_CLOSE_ON_EXIT=FALSE
+            - name: AISAFE_AUDIT_FILE
+              value: /data/audit.log
             # aircraft-maintenance (contracts C1 and C3), through the entry of this VM (below)
             - name: AIRCRAFT_MAINTENANCE_URL
               value: http://aircraft-maintenance-local
@@ -522,6 +527,8 @@ spec:
             # not by H2 as soon as the replica is told to stop: requests still being answered need it.
             - name: DB_URL
               value: jdbc:h2:file:/data/flight-ops;DB_CLOSE_ON_EXIT=FALSE
+            - name: AISAFE_AUDIT_FILE
+              value: /data/audit.log
             # aircraft-maintenance (contracts C1 and C4), through the entry of this VM (below)
             - name: AIRCRAFT_MAINTENANCE_URL
               value: http://aircraft-maintenance-local
@@ -718,6 +725,8 @@ spec:
               valueFrom: { secretKeyRef: { name: aisafe-jwt, key: secret } }
             - name: DB_URL
               value: jdbc:h2:file:/data/login;DB_CLOSE_ON_EXIT=FALSE
+            - name: AISAFE_AUDIT_FILE
+              value: /data/audit.log
           volumeMounts:
             - name: data
               mountPath: /data
