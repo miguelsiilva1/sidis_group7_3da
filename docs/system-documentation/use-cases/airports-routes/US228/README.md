@@ -12,7 +12,7 @@
 
 | Method | Route                               | Roles | Use case            |
 | ------ | ----------------------------------- | ----- | ------------------- |
-| GET    | `/api/routes/export?format={geojson | kml}` | Backoffice Operator | `ExportRouteNetworkUseCase` |
+| GET    | `/api/routes/export?format={geojson\|kml}` | Backoffice Operator | `ExportRouteNetworkUseCase` |
 
 Through the virtual IP of the service, HTTPS only, with a JWT issued by the login.
 
