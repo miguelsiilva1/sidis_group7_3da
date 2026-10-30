@@ -41,3 +41,5 @@ must understand the whole system, not only the part they own.
 | #12 | Diogo Nogueira | 2026-10-26 | live demo dashboard                                                                               |
 | #13 | Diogo Nogueira | 2026-10-26 | HTTPS on the virtual IPs                                                                          |
 | #14 | Diogo Nogueira | 2026-10-30 | audit trail                                                                                       |
+| #15 | Diogo Nogueira | 2026-10-30 | parts import restricted to technicians and supervisors (US225)                                    |
+| #16 | Diogo Nogueira | 2026-10-30 | use cases with SSD and SD, contrats C1-C5, global artifacts, screenshots of the running system    |
