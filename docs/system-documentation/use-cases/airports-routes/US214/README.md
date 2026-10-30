@@ -12,7 +12,7 @@
 
 | Method | Route                                         | Roles      | Use case |
 | ------ | --------------------------------------------- | ---------- | -------- |
-| GET    | `/api/routes?status=active&sortBy={popularity | distance}` | ATCC     | `ListActiveRoutesUseCase` |
+| GET    | `/api/routes?status=active&sortBy={popularity\|distance}` | ATCC     | `ListActiveRoutesUseCase` |
 
 Through the virtual IP of the service, HTTPS only, with a JWT issued by the login.
 
