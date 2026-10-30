@@ -76,6 +76,7 @@ public class SecurityConfig {
                         // WP #4A/4B - Maintenance
                         .requestMatchers(HttpMethod.POST, "/api/maintenance/templates/import").hasRole("MAINTENANCE_TECHNICIAN") // US225 (BONUS)
                         .requestMatchers(HttpMethod.POST, "/api/maintenance/records/import").hasRole("MAINTENANCE_TECHNICIAN") // US225 (BONUS)
+                        .requestMatchers(HttpMethod.POST, "/api/maintenance/parts/import").hasAnyRole("MAINTENANCE_TECHNICIAN", "MAINTENANCE_SUPERVISOR") // US225 (BONUS), as US226
                         .requestMatchers(HttpMethod.POST, "/api/maintenance/templates").hasRole("MAINTENANCE_TECHNICIAN") // US115b
                         .requestMatchers(HttpMethod.POST, "/api/maintenance/records").hasRole("MAINTENANCE_TECHNICIAN") // US115a
                         .requestMatchers(HttpMethod.POST, "/api/maintenance/parts").hasAnyRole("MAINTENANCE_TECHNICIAN", "MAINTENANCE_SUPERVISOR") // US226 (BONUS)
