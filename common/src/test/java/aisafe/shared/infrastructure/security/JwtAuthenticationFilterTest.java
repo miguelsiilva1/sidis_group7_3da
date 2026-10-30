@@ -92,6 +92,8 @@ class JwtAuthenticationFilterTest {
                 .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN")));
         assertTrue(authentication.getAuthorities().stream()
                 .anyMatch(a -> a.getAuthority().equals("ROLE_USER")));
+        verify(request).setAttribute(AuditFilter.USER_ATTRIBUTE, "testUser");
+        verify(request).setAttribute(AuditFilter.ROLES_ATTRIBUTE, List.of("ADMIN", "USER"));
         verify(filterChain).doFilter(request, response);
     }
 }

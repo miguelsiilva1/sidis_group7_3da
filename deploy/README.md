@@ -160,6 +160,20 @@ fail; it needs `python3`, and to reach the nodes (port 6443) and the virtual IPs
 logs: the entries write one line per request and one per attempt, and the replicas log each call to
 a peer, all under the request's correlation id (`X-Correlation-Id`, given by the entry).
 
+## Reading the audit trail
+
+Every replica writes one JSON line per request to the API it answered (who, what, result, when),
+in `/data/audit.log` on its own disk, apart from its other logs:
+
+```sh
+kubectl -n aisafe exec aircraft-maintenance-0 -- tail -n 20 /data/audit.log
+kubectl -n aisafe exec flight-ops-1 -- grep '"status":403' /data/audit.log    # refused requests
+```
+
+```json
+{"time":"2026-10-26T15:40:02.114Z","user":"atcc","roles":["ATCC"],"method":"POST","path":"/api/flights","status":201,"node":"flight-ops-1","correlationId":"9c2e…","forwardedBy":null,"ms":184}
+```
+
 ## When something fails
 
 The script stops at the first error and says where. After fixing it, run it again.

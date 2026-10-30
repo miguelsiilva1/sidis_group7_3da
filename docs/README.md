@@ -174,7 +174,7 @@ Section 7 (diagram above).
 | Authentication between services | contracts C1-C5 carry the user's token (the callee applies its own rules); replication between replicas (`/internal/replicas/**`) needs a service token (role `SERVICE`) | Done, with the same secret as user tokens |
 | Traceability | every log line has the replica and the correlation id (`X-Correlation-Id`), passed on to peers and other services | Done |
 | Encryption in transit | client to entry: HTTPS only (TLS 1.2 or later) on the virtual IPs, ended by Envoy; certificate for the four virtual IPs, made by `deploy/setup.sh` and kept in a k3s Secret (its key never leaves the cluster); plain HTTP on the virtual IPs is refused | Done for the client. **Not done** inside the cluster (see limitations) |
-| Audit logging | — | **Not done** as a separate audit trail (only the request logs above) |
+| Audit logging | every request to the API (`/api/**`), also those refused (401, 403), is one JSON line in its own file on the replica's disk (`/data/audit.log`, 5 files of 10 MB at most): time, user and roles, method and path, status, replica, correlation id, the peer that forwarded it, duration. Never the body or the token (`AuditFilter` in `common`) | Done |
 
 ## 12. Main decisions
 
@@ -191,10 +191,13 @@ Section 7 (diagram above).
 
 ## 13. Known limitations
 
-- **Encryption only from the client to the entry, and no audit trail yet** (section 11): inside the
-  cluster (entry to replica, replica to replica, service to service) requests go in plain HTTP; to
-  add, mutual TLS there, RS256 tokens with a public key (JWKS) so services cannot issue tokens, and
-  an audit log of every write (who, what, when, result).
+- **Encryption only from the client to the entry** (section 11): inside the cluster (entry to
+  replica, replica to replica, service to service) requests go in plain HTTP; to add, mutual TLS
+  there, and RS256 tokens with a public key (JWKS) so services cannot issue tokens.
+- **The audit trail is split by replica**: each replica writes what it answered on its own disk, so
+  following a request means reading the trail of the replicas involved (the correlation id joins
+  them); it is lost with the replica's disk, and login attempts are recorded without the user name
+  (it is only in the body). Replication between replicas (`/internal/**`) is not in it.
 - **The entries' certificate is self-signed**: every client has to trust `deploy/entry.crt`; in
   production it would come from a certificate authority the clients already trust.
 - **The node ports for tests** (one replica directly) are plain HTTP and bypass the entry.

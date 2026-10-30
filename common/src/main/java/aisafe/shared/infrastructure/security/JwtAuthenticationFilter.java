@@ -53,6 +53,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 var authentication = new UsernamePasswordAuthenticationToken(
                         subject, null, authorities);
                 SecurityContextHolder.getContext().setAuthentication(authentication);
+                // For the audit trail (AuditFilter), which runs outside Spring Security
+                request.setAttribute(AuditFilter.USER_ATTRIBUTE, subject);
+                request.setAttribute(AuditFilter.ROLES_ATTRIBUTE, roles);
             }
         }
 
