@@ -61,7 +61,10 @@ without losing data.
 | C3  | airports-routes             | `GET /internal/aircraft-models/{name}` | 200 with the manufacturer if the model exists, 404 if not                                                   |
 | C4  | flight-ops                  | `PUT /internal/flights/{id}`           | 200 stored (idempotent); 404 the aircraft does not exist; 409 the aircraft is inactive or under maintenance |
 
-All are commands or queries over HTTP, with the user's token (no events in Assignment 1).
+All are commands or queries over HTTP, with the user's token (no events in Assignment 1); the C4
+copies that flight-ops sends outside a user's request (start-up, retried compensations) carry its
+service token instead. Through the virtual IP, `/internal/**` answers 404: only services inside the
+cluster reach it.
 
 ## 6. Scenarios
 
@@ -105,7 +108,9 @@ when data may be missing (both holders of some records did not answer).
 - Every request needs a JWT issued by login, validated here without calling login.
 - Access by role (`SecurityConfig`), the same rules as the monolith.
 - `/internal/replicas/**` (replication between replicas): role SERVICE only.
-- `/internal/**` (C1, C3, C4): authenticated with the user's token forwarded by the calling service.
+- `/internal/**` (C1, C3, C4): authenticated with the user's token forwarded by the calling service
+  (or flight-ops' service token for C4 copies outside a user's request); not reachable through the
+  virtual IP (404 at the entry).
 - Every log line carries the replica and the correlation id.
 
 ## 10. Known limitations

@@ -209,9 +209,10 @@ route_write_worker() {
 # Schedules a flight with random schedule, reads it back.
 flight_worker() {
   local ac year month day hour min dep arr id
-  local aircrafts=(CS-TKA CS-TKB CS-TKC)
+  # Sample aircraft that can take flights (CS-TKB is under maintenance: its flights get 409)
+  local aircrafts=(CS-TKA CS-TKC)
   while :; do
-    ac=${aircrafts[$((RANDOM % 3))]}
+    ac=${aircrafts[$((RANDOM % ${#aircrafts[@]}))]}
     year=$((2100 + RANDOM % 7000))
     month=$(printf '%02d' $((1 + RANDOM % 12)))
     day=$(printf '%02d' $((1 + RANDOM % 28)))

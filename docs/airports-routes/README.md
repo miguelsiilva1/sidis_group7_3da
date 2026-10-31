@@ -68,7 +68,8 @@ replica can be lost without losing data.
 | C3  | → aircraft-maintenance | `GET /internal/aircraft-models/{name}`        | 200 if the model exists, 404 if not                                                                       |
 | C5  | flight-ops →           | `PUT /internal/flights/{id}`                  | 200 stored (idempotent); 404 route does not exist; 409 route not active                                   |
 
-All of them are commands or queries over HTTP, with the user's token: there are no events or
+All of them are commands or queries over HTTP, with the user's token (the C5 copies that flight-ops
+sends outside a user's request carry its service token instead): there are no events or
 message queues (Assignment 1). Calls to aircraft-maintenance go to the Envoy entry of the same
 node, which picks a ready replica and repeats the request on another one if it fails. Timeouts:
 1 s to connect, 10 s to answer.
@@ -170,7 +171,9 @@ only when data may be missing (both holders of some routes did not answer).
 - Access by role (`SecurityConfig`), the same rules as the monolith for airports and routes; US203
   and US227 require ATCC.
 - `/internal/replicas/**` (replication between replicas): role SERVICE only, the token of a replica.
-- `/internal/**` (C2, C5): authenticated with the user's token forwarded by the calling service.
+- `/internal/**` (C2, C5): authenticated with the user's token forwarded by the calling service
+  (or flight-ops' service token for C5 copies outside a user's request); not reachable through the
+  virtual IP (404 at the entry).
 - Every log line carries the replica (`nodeId`) and the correlation id (`X-Correlation-Id`), also
   across services.
 

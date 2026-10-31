@@ -209,7 +209,7 @@ peer asked, under the request's correlation id.
 
 ![Forwarding](docs/screenshots/forwarding.png)
 
-**Postman**: the forwarding folder, and the whole collection (84 requests, 197 checks, none failed).
+**Postman**: the forwarding folder, and the whole collection (none failed).
 
 ![Postman, forwarding folder](docs/screenshots/postman-forwarding.png)
 

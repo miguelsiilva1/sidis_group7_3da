@@ -26,14 +26,14 @@ the same node, which picks a ready replica and repeats the request on another on
 
 ![Components](svg/components.svg)
 
-| Component                                                                                       | What it does                                                                                                                   |
-| ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `ScheduleFlightUseCase`                                                                         | The scheduling Saga (section 6.1)                                                                                              |
-| `Fleet` / `HttpFleet` (`fleet`)                                                                 | Port to the other services (C1, C2, C4, C5). Sends the user's token and the correlation id; 503 when a service does not answer |
-| `SagaCompensationService` (`flightops/infrastructure/saga`)                                     | Compensations that could not be delivered: stored in the database, retried every 5 s                                           |
-| `FlightsAcrossReplicas` (`GatheredFlights`)                                                     | Every flight of all replicas: overlapping flights of an aircraft, reports                                                      |
-| `FlightReplicaHandler`                                                                          | What is copied to the next replica, and how a received copy is applied                                                         |
-| `PeerForwardingAdvice`, `PeerClient`, `ReplicaGatherer`, `Replicator`, `ReplicaSync` (`common`) | Forwarding and replication shared by every service                                                                             |
+| Component                                                                                       | What it does                                                                                                                                                                               |
+| ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `ScheduleFlightUseCase`                                                                         | The scheduling Saga (section 6.1)                                                                                                                                                          |
+| `Fleet` / `HttpFleet` (`fleet`)                                                                 | Port to the other services (C1, C2, C4, C5). Sends the user's token (or, outside a user's request, the replica's service token) and the correlation id; 503 when a service does not answer |
+| `SagaCompensationService` (`flightops/infrastructure/saga`)                                     | Compensations that could not be delivered: stored in the database, retried every 5 s                                                                                                       |
+| `FlightsAcrossReplicas` (`GatheredFlights`)                                                     | Every flight of all replicas: overlapping flights of an aircraft, reports                                                                                                                  |
+| `FlightReplicaHandler`                                                                          | What is copied to the next replica, and how a received copy is applied                                                                                                                     |
+| `PeerForwardingAdvice`, `PeerClient`, `ReplicaGatherer`, `Replicator`, `ReplicaSync` (`common`) | Forwarding and replication shared by every service                                                                                                                                         |
 
 ## 3. Domain model
 
@@ -111,7 +111,9 @@ Each copy carries the flight's version: C4 and C5 are idempotent, so a step can 
 - Every request needs a JWT issued by login, validated here without calling login.
 - Access by role (`SecurityConfig`): scheduling a flight requires ATCC; importing flights requires
   Backoffice Operator.
-- Calls to the other services carry the user's token, so each owner applies its own rules.
+- Calls to the other services carry the user's token, so each owner applies its own rules. Outside a
+  user's request (sample flights copied at start-up, retried compensations) they carry the replica's
+  service token (role `SERVICE`).
 - `/internal/replicas/**` (replication between replicas): role SERVICE only.
 
 ## 10. Known limitations
