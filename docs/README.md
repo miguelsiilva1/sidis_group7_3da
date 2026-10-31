@@ -86,7 +86,9 @@ cluster and the services).
 | C5  | flight-ops → airports-routes                       | `PUT /internal/flights/{id}` (copy of a flight) | 200 stored, idempotent; 404 no such route; 409 route not active                   |
 
 All are commands or queries over HTTP (no events or message queues in Assignment 1), carrying the
-user's JWT and the correlation id. Each one answers wherever the data is: a replica that does not
+user's JWT and the correlation id; outside a user's request (sample data at start-up, retried
+compensations), flight-ops sends its replica's service token instead. They are reachable only from inside the cluster: through the
+virtual IPs, `/internal/**` answers 404. Each one answers wherever the data is: a replica that does not
 hold it asks its peers (section 7). The fields of each request are in the OpenAPI documentation of
 the owner (`/v3/api-docs`).
 
@@ -175,6 +177,25 @@ peers for what it should hold (`ReplicaSync`), which repairs anything missed.
 `deploy/manifests/failure-test.sh` sends requests without pause while it kills a replica or a
 login, redeploys, powers off a VM or freezes one, and counts the requests that failed.
 
+**Measured** on 2026-10-30, on the reference cluster (commit `15bb7ca`, the entries closed to `/internal`),
+with 14 kinds of request running at the same time (reads, listings, writes and deletes of aircraft and
+routes, flight scheduling, logins):
+
+| Scenario                                                | Back to normal | Requests | Bad | What the bad ones were                                                                                                                                                                                                  | Slowest answer |
+| ------------------------------------------------------- | -------------- | -------- | --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| replica-crash (aircraft-maintenance-1 killed)           | 21 s           | 1411     | 1   | one create got 503 ("try again") 3 s after the kill                                                                                                                                                                     | 2.5 s          |
+| routes-crash (airports-routes-1 killed)                 | 16 s           | 1321     | 1   | one route re-created right after its deletion got 409                                                                                                                                                                   | 0.6 s          |
+| flight-ops-crash (flight-ops-1 killed)                  | 18 s           | 1420     | 0   | -                                                                                                                                                                                                                       | 1.0 s          |
+| login-crash (a login killed)                            | 16 s           | 1313     | 0   | -                                                                                                                                                                                                                       | 0.9 s          |
+| deploy (every service restarted, one replica at a time) | 166 s          | 5707     | 0   | -                                                                                                                                                                                                                       | 2.5 s          |
+| node-off (a machine loses power)                        | 87 s           | 3062     | 174 | between 5 s and 33 s after the failure: 107 listings answered with `X-Partial-Result: true`, 23 deletes and 19 flight schedulings got 503, 24 route re-creations got 409, 1 flight scheduling had no answer within 15 s | 15 s           |
+| node-freeze (a machine's kernel stops)                  | 99 s           | 3524     | 1   | one route creation had no answer within 15 s                                                                                                                                                                            | 15 s           |
+
+Losing a replica, a login or a redeploy costs at most one request in more than a thousand. Losing a
+whole machine costs about 30 s in which part of the answers are partial or "try again" (503), which
+the client can tell apart from a normal answer, plus the two problems in the known limitations
+(section 13). The details of each request are kept in `target/failure-test/<run>/`.
+
 To watch it happen, the **demo dashboard** (`deploy/dashboard/dashboard.sh`, run on any computer that
 reaches the cluster) draws the machines, the replicas and their state, the virtual IPs, and every
 request as it travels: client → virtual IP → entry → replica, the other attempts when a replica
@@ -205,8 +226,9 @@ Section 7 (diagram above).
 | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
 | Authentication of users         | login issues a JWT (HMAC-SHA, shared secret from a k3s Secret); every service validates it locally, without calling login                                                                                                                                                                                                                        | Done                                                                   |
 | Access control (RBAC)           | per service, the same rules as the monolith (`SecurityConfig` of each service); 401 without a token, 403 with the wrong role                                                                                                                                                                                                                     | Done                                                                   |
-| Authentication between services | contracts C1-C5 carry the user's token (the callee applies its own rules); replication between replicas (`/internal/replicas/**`) needs a service token (role `SERVICE`)                                                                                                                                                                         | Done, with the same secret as user tokens                              |
+| Authentication between services | contracts C1-C5 carry the user's token (the callee applies its own rules), or, outside a user's request (sample data at start-up, retried compensations) flight-ops sends its replica's service token instead; replication between replicas (`/internal/replicas/**`) needs a service token (role `SERVICE`)                                     | Done, with the same secret as user tokens                              |
 | Traceability                    | every log line has the replica and the correlation id (`X-Correlation-Id`), passed on to peers and other services                                                                                                                                                                                                                                | Done                                                                   |
+| Internal routes not exposed     | through the virtual IPs the entries answer 404 for `/internal/**` (contracts and replication) and for the H2 database console; services reach `/internal/**` only from inside the cluster (the entries' plain HTTP ports, or replica to replica)                                                                                                 | Done                                                                   |
 | Encryption in transit           | client to entry: HTTPS only (TLS 1.2 or later) on the virtual IPs, ended by Envoy; certificate for the four virtual IPs, made by `deploy/setup.sh` and kept in a k3s Secret (its key never leaves the cluster); plain HTTP on the virtual IPs is refused                                                                                         | Done for the client. **Not done** inside the cluster (see limitations) |
 | Audit logging                   | every request to the API (`/api/**`), also those refused (401, 403), is one JSON line in its own file on the replica's disk (`/data/audit.log`, 5 files of 10 MB at most): time, user and roles, method and path, status, replica, correlation id, the peer that forwarded it, duration. Never the body or the token (`AuditFilter` in `common`) | Done                                                                   |
 
@@ -235,6 +257,15 @@ On the running cluster: [HTTPS on a virtual IP, plain HTTP refused](screenshots/
   following a request means reading the trail of the replicas involved (the correlation id joins
   them); it is lost with the replica's disk, and login attempts are recorded without the user name
   (it is only in the body). Replication between replicas (`/internal/**`) is not in it.
+- **Inside the cluster the internal routes only need a valid token** (`/internal/**`): the contracts C1-C5 accept any
+  role (the caller forwards the user's token), and each replica's H2 console is still on (default
+  credentials). Both are closed to clients (404 through the virtual IPs), but anything already inside
+  the cluster could reach them; to add, the service token for C1-C5 and the console turned off.
+- **Losing a whole machine is not invisible** (section 9): for about 30 s some listings are marked
+  partial and some writes get 503 ("try again"); a request already sent to the machine that died can
+  stay unanswered until the client gives up.
+- **A route re-created right after its deletion can get 409**: until the deletion reaches every
+  replica, the uniqueness check can still find the old route on a peer.
 - **The entries' certificate is self-signed**: every client has to trust `deploy/entry.crt`; in
   production it would come from a certificate authority the clients already trust.
 - **The node ports for tests** (one replica directly) are plain HTTP and bypass the entry.

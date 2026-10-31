@@ -42,6 +42,13 @@ static_resources:
                         - header: { key: X-Correlation-Id, value: "%REQ(X-REQUEST-ID)%" }
                           append_action: ADD_IF_ABSENT
                       routes:
+                          # Through the virtual IPs (HTTPS) clients reach only the API: the routes between
+                          # services and replicas (/internal) and the database console answer 404. The calls
+                          # from inside the cluster come in plain HTTP (10081, 10082) and still pass.
+                          - match: { prefix: "/internal", headers: [{ name: x-forwarded-proto, string_match: { exact: https } }] }
+                            direct_response: { status: 404 }
+                          - match: { prefix: "/h2-console" }
+                            direct_response: { status: 404 }
                           - match: { prefix: "/", headers: [{ name: ":method", string_match: { exact: GET } }] }
                             route:
                               cluster: aircraft-maintenance
@@ -118,6 +125,13 @@ static_resources:
                         - header: { key: X-Correlation-Id, value: "%REQ(X-REQUEST-ID)%" }
                           append_action: ADD_IF_ABSENT
                       routes:
+                          # Through the virtual IPs (HTTPS) clients reach only the API: the routes between
+                          # services and replicas (/internal) and the database console answer 404. The calls
+                          # from inside the cluster come in plain HTTP (10081, 10082) and still pass.
+                          - match: { prefix: "/internal", headers: [{ name: x-forwarded-proto, string_match: { exact: https } }] }
+                            direct_response: { status: 404 }
+                          - match: { prefix: "/h2-console" }
+                            direct_response: { status: 404 }
                           - match: { prefix: "/", headers: [{ name: ":method", string_match: { exact: GET } }] }
                             route:
                               cluster: airports-routes
@@ -188,6 +202,13 @@ static_resources:
                         - header: { key: X-Correlation-Id, value: "%REQ(X-REQUEST-ID)%" }
                           append_action: ADD_IF_ABSENT
                       routes:
+                          # Through the virtual IPs (HTTPS) clients reach only the API: the routes between
+                          # services and replicas (/internal) and the database console answer 404. The calls
+                          # from inside the cluster come in plain HTTP (10081, 10082) and still pass.
+                          - match: { prefix: "/internal", headers: [{ name: x-forwarded-proto, string_match: { exact: https } }] }
+                            direct_response: { status: 404 }
+                          - match: { prefix: "/h2-console" }
+                            direct_response: { status: 404 }
                           - match: { prefix: "/", headers: [{ name: ":method", string_match: { exact: GET } }] }
                             route:
                               cluster: flight-ops
@@ -252,6 +273,13 @@ static_resources:
                         - header: { key: X-Correlation-Id, value: "%REQ(X-REQUEST-ID)%" }
                           append_action: ADD_IF_ABSENT
                       routes:
+                          # Through the virtual IPs (HTTPS) clients reach only the API: the routes between
+                          # services and replicas (/internal) and the database console answer 404. The calls
+                          # from inside the cluster come in plain HTTP (10081, 10082) and still pass.
+                          - match: { prefix: "/internal", headers: [{ name: x-forwarded-proto, string_match: { exact: https } }] }
+                            direct_response: { status: 404 }
+                          - match: { prefix: "/h2-console" }
+                            direct_response: { status: 404 }
                           - match: { prefix: "/", headers: [{ name: ":method", string_match: { exact: GET } }] }
                             route:
                               cluster: login

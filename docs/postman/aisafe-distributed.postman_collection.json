@@ -2422,6 +2422,71 @@
               }
             }
           ]
+        },
+        {
+          "name": "Internal routes are not reachable through the virtual IP: 404",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "https://{{ar_vip}}/internal/flights/999999",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{technician_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"999999\",\n  \"departureDateTime\": \"2031-01-01T10:00:00Z\",\n  \"arrivalDateTime\": \"2031-01-01T11:00:00Z\",\n  \"status\": \"SCHEDULED\",\n  \"originIataCode\": \"LIS\",\n  \"destinationIataCode\": \"OPO\",\n  \"aircraftRegistration\": \"CS-TKA\",\n  \"version\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 404: /internal is only for the services, inside the cluster\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Database console is not reachable through the virtual IP: 404",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "https://{{am_vip}}/h2-console/",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 404\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
         }
       ]
     },

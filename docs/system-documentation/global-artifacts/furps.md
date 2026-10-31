@@ -29,10 +29,11 @@
 ## Reliability
 
 - **Availability with one failure at a time** (a replica, a login, a machine powered off or frozen, a
-  redeploy): no request fails or gets a wrong answer. Three replicas per service, one per machine,
-  behind virtual IPs that move to another machine (MetalLB) and entries that retry on another replica
-  (Envoy). Measured with `deploy/manifests/failure-test.sh` on 2026-10-17: 0 failed or wrong requests
-  out of 9606, in the five scenarios.
+  redeploy). Three replicas per service, one per machine, behind virtual IPs that move to another
+  machine (MetalLB) and entries that retry on another replica (Envoy). Measured with
+  `deploy/manifests/failure-test.sh` on 2026-10-30 ([results](../../README.md#9-fault-tolerance)): a
+  replica, a login or a redeploy cost at most 1 request out of more than 1300; a machine powered off
+  costs about 30 s of partial answers and 503 "try again" (174 of 3062 requests); a frozen one, 1 of 3524.
 - **No data lost when one replica or machine is lost**: every record is on two replicas, every catalog
   on all three, each replica on its own disk.
 - **Self-healing**: k3s restarts failed replicas; the vigia turns stopped machines back on and isolates

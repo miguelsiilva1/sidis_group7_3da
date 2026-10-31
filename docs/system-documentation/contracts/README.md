@@ -1,6 +1,6 @@
 # Contracts between services
 
-The services talk only through these five HTTP calls: commands or queries, no events or message queues (Assignment 1). Each goes through the entry (Envoy) of the caller's own machine, which picks a ready replica of the owner, and carries the actor's JWT and the correlation id. Dependencies go one way: flight-ops → airports-routes → aircraft-maintenance.
+The services talk only through these five HTTP calls: commands or queries, no events or message queues (Assignment 1). Each goes through the entry (Envoy) of the caller's own machine, which picks a ready replica of the owner, and carries the actor's JWT and the correlation id. Dependencies go one way: flight-ops → airports-routes → aircraft-maintenance. Clients cannot call them: through the virtual IPs, `/internal/**` answers 404 at the entry; the services reach it through the entry's plain HTTP ports, inside the cluster.
 
 | #                  | Caller → owner                                     | Request                                       | Kind                      | Used by                    |
 | ------------------ | -------------------------------------------------- | --------------------------------------------- | ------------------------- | -------------------------- |
