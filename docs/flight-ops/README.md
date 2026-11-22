@@ -123,3 +123,24 @@ Each copy carries the flight's version: C4 and C5 are idempotent, so a step can 
 - **Overlap check across replicas is best effort:** two flights for the same aircraft scheduled at
   the same time on two replicas, during a partition, could overlap.
 - The rest, as for the whole system: [system documentation, section 13](../README.md#13-known-limitations).
+
+## 11. Assignment 2: messaging, the Saga over RabbitMQ and CQRS
+
+With `EVENTS_ENABLED=true` (the k3s deployment), `Fleet` is `MessagingFleet` and `FlightsAcrossReplicas` is `ReadModelFlights`; the whole picture is in
+[`../assignment-2.md`](../assignment-2.md).
+
+- **Queries (C1, C2, C3):** the aircraft, aircraft models and routes come from this replica's read
+  model, kept by the events of aircraft-maintenance and airports-routes and by a snapshot asked on
+  startup. A key not there yet (an aircraft created a moment ago) is asked to its owner over the
+  broker (`aircraft.get`, `route.get`): never a false 404.
+- **Commands (C4, C5):** the Saga's steps go through the broker as the command `flightcopy.record`
+  (request/reply, expiring in 5 s), checked by the owner at that moment. The answers become the same
+  exceptions as over HTTP, so `ScheduleFlightUseCase` and the compensations did not change: the Saga
+  is still orchestrated here ([diagram](../svg/sd_schedule_flight_saga_amqp.svg)).
+- **CQRS read model and events (`flight.*`):** scheduled flights are published to RabbitMQ
+  (`flight.created`, `flight.updated`, `flight.deleted`) via the transactional outbox (`event_outbox`
+  and `EventRelay`). Each replica maintains its own read model via `FlightProjection` and
+  `ReadModelListener`. Queries (`FlightsAcrossReplicas`) are answered by `ReadModelFlights` directly from
+  the local `read_model` table, so listings, overlap checks during scheduling, and utilization reports no
+  longer need to gather from peers over HTTP. `ReadModelReconciler` automatically reconciles flights on
+  startup and periodically.
